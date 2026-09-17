@@ -31,6 +31,9 @@ import { handleFindJob } from "@/lib/mcp/tools/findJob";
 import { handleUpdateJob } from "@/lib/mcp/tools/updateJob";
 import { handleAddJobsBatch } from "@/lib/mcp/tools/addJobsBatch";
 import { handleSaveMatchResultsBatch } from "@/lib/mcp/tools/saveMatchResultsBatch";
+import { McpAddTaskInputShape, McpAddTaskSchema, handleAddTask } from "@/lib/mcp/tools/addTask";
+import { McpAddAutomationInputShape, McpAddAutomationSchema, handleAddAutomation } from "@/lib/mcp/tools/addAutomation";
+import { McpGetMatchQueueInputShape, McpGetMatchQueueSchema, handleGetMatchQueue } from "@/lib/mcp/tools/getMatchQueue";
 
 function isMcpEnabled(): boolean {
   const env = process.env.MCP_ENABLED;
@@ -262,6 +265,58 @@ async function handler(req: Request): Promise<Response> {
         };
       }
       return handleSaveResumeReview(parsed.data, userId, tokenName);
+    },
+  );
+
+  // Local additions: tasks and automations. Existing tokens only carry jobs:write, so both reuse it.
+  server.tool(
+    "add_task",
+    "Create a task (to-do) for the user, e.g. a follow-up or preparation step.",
+    McpAddTaskInputShape,
+    async (rawInput) => {
+      if (!auth.scopes.includes("jobs:write")) {
+        return { content: [{ type: "text" as const, text: "Insufficient scope. Required: jobs:write" }] };
+      }
+      const parsed = McpAddTaskSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map((i) => i.message).join("; ");
+        return { content: [{ type: "text" as const, text: `Validation error: ${issues}` }] };
+      }
+      return handleAddTask(parsed.data, userId);
+    },
+  );
+
+  server.tool(
+    "add_automation",
+    "Create a scheduled ATS search (Greenhouse, Lever or Ashby) over up to 25 companies, matched against a resume.",
+    McpAddAutomationInputShape,
+    async (rawInput) => {
+      if (!auth.scopes.includes("jobs:write")) {
+        return { content: [{ type: "text" as const, text: "Insufficient scope. Required: jobs:write" }] };
+      }
+      const parsed = McpAddAutomationSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map((i) => i.message).join("; ");
+        return { content: [{ type: "text" as const, text: `Validation error: ${issues}` }] };
+      }
+      return handleAddAutomation(parsed.data, userId);
+    },
+  );
+
+  server.tool(
+    "get_match_queue",
+    "Return jobs that have a usable description but no match score yet, each with the resume and scoring instructions. Score them, save with save_match_result, repeat until empty.",
+    McpGetMatchQueueInputShape,
+    async (rawInput) => {
+      if (!auth.scopes.includes("jobs:write")) {
+        return { content: [{ type: "text" as const, text: "Insufficient scope. Required: jobs:write" }] };
+      }
+      const parsed = McpGetMatchQueueSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map((i) => i.message).join("; ");
+        return { content: [{ type: "text" as const, text: `Validation error: ${issues}` }] };
+      }
+      return handleGetMatchQueue(parsed.data, userId);
     },
   );
 
