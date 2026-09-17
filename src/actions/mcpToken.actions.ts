@@ -19,6 +19,7 @@ export interface PublicTokenMeta {
 export async function createMcpToken(input: {
   name: string;
   expiryDays: 30 | 90 | 365;
+  fullAccess?: boolean;
 }): Promise<
   | { success: true; token: string; record: PublicTokenMeta }
   | { success: false; message: string }
@@ -35,7 +36,11 @@ export async function createMcpToken(input: {
     }
 
     const { plaintext, hash, prefix } = generateToken();
-    const expiresAt = new Date(Date.now() + input.expiryDays * 24 * 60 * 60 * 1000);
+    // A full-access token can call every server action, so it never lives longer than 30 days.
+    const days = input.fullAccess
+      ? Math.min(input.expiryDays, APP_CONSTANTS.MCP_FULL_TOKEN_MAX_DAYS)
+      : input.expiryDays;
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
     const record = await prisma.mcpAccessToken.create({
       data: {
@@ -43,7 +48,12 @@ export async function createMcpToken(input: {
         name: input.name.trim(),
         tokenHash: hash,
         tokenPrefix: prefix,
-        scopes: JSON.stringify(["jobs:write", "questions:write", "resume:write"]),
+        scopes: JSON.stringify([
+          "jobs:write",
+          "questions:write",
+          "resume:write",
+          ...(input.fullAccess ? [APP_CONSTANTS.MCP_FULL_SCOPE] : []),
+        ]),
         expiresAt,
       },
     });

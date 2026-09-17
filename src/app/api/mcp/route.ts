@@ -34,6 +34,9 @@ import { handleSaveMatchResultsBatch } from "@/lib/mcp/tools/saveMatchResultsBat
 import { McpAddTaskInputShape, McpAddTaskSchema, handleAddTask } from "@/lib/mcp/tools/addTask";
 import { McpAddAutomationInputShape, McpAddAutomationSchema, handleAddAutomation } from "@/lib/mcp/tools/addAutomation";
 import { McpGetMatchQueueInputShape, McpGetMatchQueueSchema, handleGetMatchQueue } from "@/lib/mcp/tools/getMatchQueue";
+import { registerActionTools } from "@/lib/mcp/actions/register";
+import { APP_CONSTANTS } from "@/lib/constants";
+import prisma from "@/lib/db";
 
 function isMcpEnabled(): boolean {
   const env = process.env.MCP_ENABLED;
@@ -59,6 +62,14 @@ async function handler(req: Request): Promise<Response> {
   const { userId, tokenName } = auth;
 
   const server = new McpServer({ name: "jobsync", version: "1.0.0" });
+
+  // Full-access tokens get every server action (lib/mcp/actions/register.ts).
+  if (auth.scopes.includes(APP_CONSTANTS.MCP_FULL_SCOPE)) {
+    const owner = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true } });
+    if (owner) {
+      registerActionTools(server, { user: { id: owner.id, name: owner.name ?? "", email: owner.email }, tokenName, scopes: auth.scopes });
+    }
+  }
 
   server.tool(
     "add_job",

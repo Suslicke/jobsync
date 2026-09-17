@@ -141,6 +141,9 @@ export const APP_CONSTANTS = {
   MCP_TOKEN_EXPIRY_DEFAULT_DAYS: 90,
   MCP_TOKEN_MAX_PER_USER: 10,
   MCP_RATE_LIMIT_MAX: 60,
+  // Scope that unlocks every server action over MCP (see lib/mcp/actions).
+  MCP_FULL_SCOPE: "full",
+  MCP_FULL_TOKEN_MAX_DAYS: 30,
   MCP_RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,
   MCP_DEFAULT_JOB_TYPE: "Full-time",
   MCP_DEFAULT_STATUS: "draft",

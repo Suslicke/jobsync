@@ -6,6 +6,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { Label } from "../ui/label";
+import { Switch } from "../ui/switch";
 import { toastSuccess, toastError } from "@/lib/toast";
 import {
   Dialog,
@@ -154,6 +155,7 @@ export default function McpAccessSettings() {
     APP_CONSTANTS.MCP_TOKEN_EXPIRY_DEFAULT_DAYS as 30 | 90 | 365,
   );
 
+  const [fullAccess, setFullAccess] = useState(false);
   const [revealedToken, setRevealedToken] = useState<{ token: string; name: string } | null>(null);
 
   const mcpUrl =
@@ -173,7 +175,7 @@ export default function McpAccessSettings() {
   const handleGenerate = async () => {
     if (!tokenName.trim()) return;
     setGenerating(true);
-    const result = await createMcpToken({ name: tokenName.trim(), expiryDays });
+    const result = await createMcpToken({ name: tokenName.trim(), expiryDays, fullAccess });
     setGenerating(false);
     if (!result.success) {
       toastError(result.message);
@@ -182,6 +184,7 @@ export default function McpAccessSettings() {
     setRevealedToken({ token: result.token, name: result.record.name });
     setShowGenerateDialog(false);
     setTokenName("");
+    setFullAccess(false);
     setExpiryDays(APP_CONSTANTS.MCP_TOKEN_EXPIRY_DEFAULT_DAYS as 30 | 90 | 365);
     await fetchTokens();
   };
@@ -320,6 +323,17 @@ export default function McpAccessSettings() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+              <div className="space-y-1">
+                <Label htmlFor="mcp-full-access">Full access</Label>
+                <p className="text-xs text-muted-foreground">
+                  Lets the agent do everything you can in the app: resumes, questions, tasks, contacts,
+                  automations, settings. Treat the token like a password. Expires in at most{" "}
+                  {APP_CONSTANTS.MCP_FULL_TOKEN_MAX_DAYS} days.
+                </p>
+              </div>
+              <Switch id="mcp-full-access" checked={fullAccess} onCheckedChange={setFullAccess} />
             </div>
           </div>
           <DialogFooter>
