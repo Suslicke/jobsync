@@ -174,11 +174,12 @@ export function registerActionTools(
   }
 
   // --- files and route handlers ----------------------------------------------
-  const asRoute = async (fn: () => Promise<Response>, label: string): Promise<ToolResult> => {
+  const asRoute = async (fn: () => Promise<Response | undefined>, label: string): Promise<ToolResult> => {
     const denied = guard();
     if (denied) return denied;
     try {
       const res = await runAsUser(ctx.user, fn);
+      if (!res) return text(`Error: ${label} returned no response`);
       console.info(JSON.stringify({ mcpAudit: label, user: ctx.user.id, token: ctx.tokenName, status: res.status }));
       const type = res.headers.get("content-type") ?? "";
       const body = /json|text|csv/.test(type)
