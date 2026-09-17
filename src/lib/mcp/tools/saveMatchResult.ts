@@ -7,6 +7,10 @@ import { parseJobMatch } from "@/lib/ai/jobMatch/parse";
 import type { JobMatchData } from "@/models/ai.schemas";
 import type { DescriptionCompleteness } from "@/models/job.model";
 
+// Jobs an agent may score: ones it created over MCP, and ones an automation discovered
+// (scored by the agent instead of a server-side AI provider).
+const MCP_MATCHABLE = [{ createdVia: { not: null } }, { automationId: { not: null } }];
+
 export async function handleSaveMatchResult(
   input: z.infer<typeof McpSaveMatchResultSchema>,
   userId: string,
@@ -65,7 +69,7 @@ export async function handleSaveMatchResult(
   // Same scope as the update below, so a job the caller can't write to
   // never leaks its completeness through this read either.
   const job = await prisma.job.findFirst({
-    where: { id: input.jobId, userId, createdVia: { not: null } },
+    where: { id: input.jobId, userId, OR: MCP_MATCHABLE },
     select: { descriptionCompleteness: true },
   });
 
@@ -85,7 +89,7 @@ export async function handleSaveMatchResult(
 
   try {
     await prisma.job.update({
-      where: { id: input.jobId, userId, createdVia: { not: null } },
+      where: { id: input.jobId, userId, OR: MCP_MATCHABLE },
       data: {
         matchScore: parsed.scores.matchScore,
         matchData: JSON.stringify(matchData),
