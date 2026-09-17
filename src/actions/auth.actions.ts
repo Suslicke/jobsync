@@ -19,6 +19,12 @@ export async function signup(formData: {
 
   const { name, email, password } = parsed.data;
 
+  // The signup page hides itself once a user exists, but this server action stays callable.
+  // Close it for good unless ALLOW_SIGNUP=true.
+  if (process.env.ALLOW_SIGNUP !== "true" && (await prisma.user.count()) > 0) {
+    return { error: "Signup is closed on this instance." };
+  }
+
   const existingUser = await prisma.user.findUnique({
     where: { email },
   });

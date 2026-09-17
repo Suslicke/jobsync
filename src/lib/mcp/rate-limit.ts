@@ -7,7 +7,8 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
-const MAX = APP_CONSTANTS.MCP_RATE_LIMIT_MAX;
+// Self-hosted single-user instances import in bulk; the default 60/hour is too tight for that.
+const MAX = Number(process.env.MCP_RATE_LIMIT_MAX) || APP_CONSTANTS.MCP_RATE_LIMIT_MAX;
 const WINDOW = APP_CONSTANTS.MCP_RATE_LIMIT_WINDOW_MS;
 const CLEANUP_THRESHOLD = 500;
 
