@@ -24,7 +24,10 @@ export type AgentChatRequest = z.infer<typeof AgentChatRequestSchema>;
 // keeps enum: [...] on the input side of the emitted JSON schema.
 export const AgentAddJobSchema = z
   .object(McpAddJobInputShape)
-  .omit({ upsert: true, allowDuplicate: true })
+  // appliedDatePrecision goes too: it answers "how well is this date known",
+  // which only a caller carrying a journal can answer. A model asked the
+  // question fills the slot, and an invented precision is worse than none.
+  .omit({ upsert: true, allowDuplicate: true, appliedDatePrecision: true })
   .extend({
     jobDescription: z
       .string()

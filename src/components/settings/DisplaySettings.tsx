@@ -11,6 +11,13 @@ import {
   FormMessage,
 } from "../ui/form";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toastSuccess, toastError } from "@/lib/toast";
@@ -22,11 +29,37 @@ import {
   updateDisplaySettings,
 } from "@/actions/userSettings.actions";
 
+// The "follow this browser" choice, and the default on purpose: a stored zone
+// that silently disagrees with the reader is how fourteen applications made on
+// the evening of 31 August ended up on 1 September with 31 August missing from
+// the chart entirely. A word rather than "", which Radix rejects as an item
+// value, and never a real IANA name.
+const BROWSER_ZONE = "browser";
+
 const appearanceFormSchema = z.object({
   theme: z.enum(["light", "dark", "system"], {
     error: "Please select a theme.",
   }),
+  timeZone: z.string(),
 });
+
+// Intl.supportedValuesOf lands in every browser this app runs in, but the
+// fallback keeps the form usable rather than empty where it does not.
+const zoneOptions = (): string[] => {
+  try {
+    return Intl.supportedValuesOf("timeZone");
+  } catch {
+    return ["UTC"];
+  }
+};
+
+const browserZone = (): string => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+};
 
 type AppearanceFormValues = z.infer<typeof appearanceFormSchema>;
 
@@ -39,20 +72,29 @@ function DisplaySettings() {
     resolver: zodResolver(appearanceFormSchema),
     defaultValues: {
       theme: "system",
+      timeZone: BROWSER_ZONE,
     },
   });
+  // Read once on the client: on the server this is the server's zone, which is
+  // the one answer that must never reach the form.
+  const [detectedZone, setDetectedZone] = useState("UTC");
+  useEffect(() => setDetectedZone(browserZone()), []);
 
   useEffect(() => {
     const fetchSettings = async () => {
       setIsLoading(true);
       try {
         const result = await getUserSettings();
+        const savedZone = result?.data?.settings?.display?.timeZone ?? BROWSER_ZONE;
         if (result.success && result.data?.settings?.display?.theme) {
           const savedTheme = result.data.settings.display.theme;
-          form.reset({ theme: savedTheme });
+          form.reset({ theme: savedTheme, timeZone: savedZone });
           setTheme(savedTheme);
         } else if (theme) {
-          form.reset({ theme: theme as "light" | "dark" | "system" });
+          form.reset({
+            theme: theme as "light" | "dark" | "system",
+            timeZone: savedZone,
+          });
         }
       } catch (error) {
         console.error("Error fetching display settings:", error);
@@ -70,7 +112,12 @@ function DisplaySettings() {
   async function onSubmit(data: AppearanceFormValues) {
     setIsSaving(true);
     try {
-      const result = await updateDisplaySettings({ theme: data.theme });
+      const result = await updateDisplaySettings({
+        theme: data.theme,
+        // Stored as undefined rather than "", so the dashboard can tell "follow
+        // this browser" from a zone the user actually chose.
+        timeZone: data.timeZone === BROWSER_ZONE ? undefined : data.timeZone,
+      });
       if (result.success) {
         setTheme(data.theme);
         toastSuccess("Your selected theme has been saved.");
@@ -166,6 +213,40 @@ function DisplaySettings() {
                       </FormLabel>
                     </FormItem>
                   </RadioGroup>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="timeZone"
+              render={({ field }) => (
+                <FormItem className="space-y-1">
+                  <FormLabel>Time zone</FormLabel>
+                  <FormDescription>
+                    Which day an application counts as on the dashboard. The
+                    moment is stored as it happened; only the day is recomputed
+                    here.
+                  </FormDescription>
+                  <FormMessage />
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger
+                      className="w-[280px]"
+                      aria-label="Select time zone"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={BROWSER_ZONE}>
+                        This browser ({detectedZone})
+                      </SelectItem>
+                      {zoneOptions().map((zone) => (
+                        <SelectItem key={zone} value={zone}>
+                          {zone}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormItem>
               )}
             />

@@ -13,3 +13,6 @@ export {
   getJobsActivityForPeriod,
   getActivityCalendarData,
 } from "./dashboard/charts";
+
+export { getCampaignAnalytics } from "./dashboard/analytics";
+export type { CampaignAnalytics } from "./dashboard/analytics";

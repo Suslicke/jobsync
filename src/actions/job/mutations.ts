@@ -163,6 +163,7 @@ export const updateJob = async (
         jobSourceId: true,
         resumeId: true,
         coverLetterId: true,
+        appliedDate: true,
         tags: { select: { id: true } },
       },
     });
@@ -185,6 +186,16 @@ export const updateJob = async (
       tagIds: tagIds.filter((tagId) => !currentTagIds.has(tagId)),
     });
 
+    // The form has no field for how well the applied date is known, so a date
+    // restated here can only be described as "nobody said" — what must not
+    // survive is the previous date's qualifier, or an imported application
+    // whose date was edited would keep its journal's "day" and be read back in
+    // UTC without a time. A date left untouched keeps its qualifier: clearing
+    // it would make the dashboard print an hour nobody recorded.
+    const appliedDateMoved =
+      dateApplied !== undefined &&
+      dateApplied.getTime() !== (current.appliedDate?.getTime() ?? NaN);
+
     const job = await prisma.job.update({
       where: {
         id,
@@ -200,6 +211,7 @@ export const updateJob = async (
         createdAt: new Date(),
         dueDate: dueDate,
         appliedDate: dateApplied,
+        ...(appliedDateMoved ? { appliedDatePrecision: null } : {}),
         description: jobDescription,
         jobType: type,
         workplaceType,

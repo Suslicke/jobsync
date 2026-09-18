@@ -1,12 +1,16 @@
 import {
   getActivityCalendarData,
   getActivityDataForPeriod,
+  getCampaignAnalytics,
   getJobsActivityForPeriod,
   getJobsActivitySummary,
   getRecentActivities,
   getRecentJobs,
 } from "@/actions/dashboard.actions";
+import { getUserSettings } from "@/actions/userSettings.actions";
 import ActivityCalendar from "@/components/dashboard/ActivityCalendar";
+import ApplicationsByDayCard from "@/components/dashboard/ApplicationsByDayCard";
+import CampaignCard from "@/components/dashboard/CampaignCard";
 import JobsActivityCard from "@/components/dashboard/JobsActivityCard";
 import JobsApplied from "@/components/dashboard/JobsAppliedCard";
 import RecentCardToggle from "@/components/dashboard/RecentCardToggle";
@@ -28,6 +32,8 @@ export default async function Dashboard() {
     weeklyData,
     activitiesData,
     activityCalendarData,
+    campaign,
+    userSettings,
   ] = await Promise.all([
     getJobsActivitySummary(7),
     getJobsActivitySummary(30),
@@ -36,7 +42,13 @@ export default async function Dashboard() {
     getJobsActivityForPeriod(),
     getActivityDataForPeriod(),
     getActivityCalendarData(),
+    getCampaignAnalytics(),
+    getUserSettings(),
   ]);
+  // Undefined means "follow whichever browser is reading", which is what the
+  // card falls back to. The server's own zone is never an answer here.
+  const timeZone: string | undefined =
+    userSettings?.data?.settings?.display?.timeZone;
   const activityCalendarDataKeys = Object.keys(activityCalendarData);
   return (
     <>
@@ -79,6 +91,15 @@ export default async function Dashboard() {
           years={activityCalendarDataKeys}
           dataByYear={activityCalendarData}
         />
+      </div>
+      <div className="w-full col-span-3">
+        <ApplicationsByDayCard
+          applications={campaign.applications}
+          timeZone={timeZone}
+        />
+      </div>
+      <div className="w-full col-span-3">
+        <CampaignCard data={campaign} />
       </div>
     </>
   );

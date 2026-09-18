@@ -375,6 +375,10 @@ model Job {
   createdAt   DateTime
   applied     Boolean     @default(false)
   appliedDate DateTime?
+  // "exact" | "minute" | "day": how precisely appliedDate is known. Null means
+  // nobody said, which is not the same as exact — a date recovered from a run
+  // log is shared by every application in that run. See lib/analytics.
+  appliedDatePrecision String?
   dueDate     DateTime?
   statusId    String
   Status      JobStatus   @relation(fields: [statusId], references: [id])

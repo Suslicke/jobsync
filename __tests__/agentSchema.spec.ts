@@ -19,9 +19,15 @@ describe("AgentAddJobSchema", () => {
     expect("allowDuplicate" in AgentAddJobSchema.shape).toBe(false);
   });
 
+  it("drops appliedDatePrecision, which only a caller holding a journal knows", () => {
+    // Asked "how well is this date known", a model answers. An invented
+    // precision is worse than none: it makes a date look measured.
+    expect("appliedDatePrecision" in AgentAddJobSchema.shape).toBe(false);
+  });
+
   it("inherits every other field from the MCP shape", () => {
     const inherited = Object.keys(McpAddJobInputShape).filter(
-      (k) => k !== "upsert" && k !== "allowDuplicate",
+      (k) => !["upsert", "allowDuplicate", "appliedDatePrecision"].includes(k),
     );
     expect(Object.keys(AgentAddJobSchema.shape).sort()).toEqual(inherited.sort());
   });

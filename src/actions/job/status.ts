@@ -18,6 +18,13 @@ export const updateJobStatus = async (
             statusId: status.id,
             applied: true,
             appliedDate: new Date(),
+            // Stamped here and now, so it is exact — and it must overwrite
+            // whatever precision the previous date carried, the same rule
+            // updateJobFromNames follows. An imported application marked
+            // Applied again from the table would otherwise wear its journal's
+            // "day" qualifier on a fresh timestamp, and the dashboard would
+            // bucket that instant in UTC and print it without its time.
+            appliedDatePrecision: "exact",
           };
         case "interview":
           return {

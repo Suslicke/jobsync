@@ -10,6 +10,7 @@ export async function createJobRecord(fields: {
   salaryRange?: string | null;
   dueDate?: Date | null;
   appliedDate?: Date | null;
+  appliedDatePrecision?: string | null;
   description: string;
   jobType: string;
   workplaceType?: string | null;

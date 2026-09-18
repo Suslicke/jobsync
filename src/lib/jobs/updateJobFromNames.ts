@@ -36,6 +36,7 @@ export interface UpdateJobFromNamesInput {
   dueDate?: Date;
   applied?: boolean;
   appliedDate?: Date;
+  appliedDatePrecision?: string;
   jobUrl?: string;
   salaryRange?: string;
   tags?: string[];
@@ -125,8 +126,14 @@ export async function updateJobFromNames(
   if (input.jobUrl !== undefined) data.jobUrl = normalizeJobUrl(input.jobUrl);
   if (input.applied !== undefined) data.applied = input.applied;
   if (input.appliedDate !== undefined) data.appliedDate = input.appliedDate;
+  if (input.appliedDatePrecision !== undefined)
+    data.appliedDatePrecision = input.appliedDatePrecision;
   if (input.applied === true && input.appliedDate === undefined) {
+    // Stamped here and now, so it is exact — and it must overwrite whatever
+    // precision the previous date carried, or a re-push without a date would
+    // leave today's timestamp wearing the imported date's qualifier.
     data.appliedDate = new Date();
+    data.appliedDatePrecision = "exact";
   }
   if (resolvedTagsResult) {
     data.tags = { set: resolvedTagsResult.resolved.map((t) => ({ id: t.id })) };

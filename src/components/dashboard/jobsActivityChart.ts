@@ -10,6 +10,10 @@ export const SERIES_COLORS = {
 
 export const OTHER_COLOR = { light: "#94a3b8", dark: "#64748b" } as const;
 
+// The one hue every single-series job bar uses, in both themes. Named here so
+// the weekly chart and the campaign chart cannot drift into two blues.
+export const JOBS_BAR_COLOR = "#2a7ef0";
+
 // Matches the "Other" bucket key charts/dashboard.actions builds server-side.
 export const OTHER_ACTIVITY_LABEL = "Other";
 

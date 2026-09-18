@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { APP_CONSTANTS, JOB_STATUS_VALUES } from "@/lib/constants";
 import { WORKPLACE_TYPES, matchEnumEntry } from "@/models/job.model";
+import { TIME_PRECISIONS } from "@/lib/analytics";
 
 // An enum rather than a described string, for the same reason status is one:
 // a small local model fills an enum-constrained slot and ignores prose hints.
@@ -17,6 +18,18 @@ const workplaceTypeField = z
   )
   .optional()
   .describe(`Work arrangement stated in the posting. One of: ${Object.values(WORKPLACE_TYPES).join(", ")}.`);
+
+// How precisely appliedDate is known, when the caller knows. Omitted means
+// nobody recorded it, which is not "exact": a date recovered from a run log's
+// filename is one instant shared by every application in that run, and a
+// date-only record has no time at all. An importer carrying a journal knows
+// this; nothing else should guess it.
+const appliedDatePrecisionField = z
+  .enum(TIME_PRECISIONS)
+  .optional()
+  .describe(
+    `How precisely appliedDate is known: ${TIME_PRECISIONS.join(", ")}. Supply it only if the source recorded it — omit it rather than assuming 'exact'. Send a 'day' date at 12:00Z, so that no reader's offset can move it into a neighbouring day.`,
+  );
 
 // Raw input shape for MCP tool registration (no transforms — SDK uses this for JSON schema)
 export const McpAddJobInputShape = {
@@ -48,6 +61,7 @@ export const McpAddJobInputShape = {
   dueDate: z.string().datetime({ offset: true }).optional().describe("Application deadline as an ISO-8601 datetime string"),
   applied: z.boolean().optional().describe("Set true if you have already submitted the application"),
   appliedDate: z.string().datetime({ offset: true }).optional().describe("Date the application was submitted as an ISO-8601 datetime string"),
+  appliedDatePrecision: appliedDatePrecisionField,
   jobUrl: z.string().url().optional().describe("Direct URL to the job posting"),
   salaryRange: z.string().optional().describe("Salary range as a free-form string, e.g. '$120k–$150k' or '100,000 CAD'"),
   tags: z.array(z.string()).optional().describe("Skills required for the job (max 10 applied, extras are dropped). Tags are created if they don't exist. e.g. ['React', 'TypeScript', 'Node.js']"),
@@ -183,6 +197,7 @@ export const McpUpdateJobInputShape = {
   dueDate: z.string().datetime({ offset: true }).optional(),
   applied: z.boolean().optional(),
   appliedDate: z.string().datetime({ offset: true }).optional(),
+  appliedDatePrecision: appliedDatePrecisionField,
   jobUrl: z.string().url().optional(),
   salaryRange: z.string().optional(),
   tags: z

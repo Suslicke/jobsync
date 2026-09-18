@@ -1233,6 +1233,38 @@ describe("jobActions", () => {
       expect(result).toStrictEqual({ data: jobData, success: true });
       expect(prisma.job.update).toHaveBeenCalledTimes(1);
     });
+    it("drops the qualifier of an applied date the form moved", async () => {
+      // The imported application carries appliedDatePrecision "day". Restating
+      // its date here without clearing that qualifier would leave the new date
+      // read back in UTC and printed without its time.
+      (getCurrentUser as any).mockResolvedValue(mockUser);
+      (prisma.job as any).findFirst.mockResolvedValue({
+        ...currentRefs,
+        appliedDate: new Date("2026-09-02T12:00:00.000Z"),
+      });
+      (prisma.job.update as any).mockResolvedValue(jobData);
+
+      await updateJob({ ...jobData, dateApplied: new Date("2026-09-10T08:00:00.000Z") });
+
+      expect((prisma.job.update as any).mock.calls[0][0].data).toMatchObject({
+        appliedDatePrecision: null,
+      });
+    });
+    it("keeps the qualifier of an applied date nobody touched", async () => {
+      // Editing the salary must not turn an imported date-only record into one
+      // that claims an hour: the form has no field to state a precision, so it
+      // has nothing to say about a date it did not change.
+      const appliedDate = new Date("2026-09-02T12:00:00.000Z");
+      (getCurrentUser as any).mockResolvedValue(mockUser);
+      (prisma.job as any).findFirst.mockResolvedValue({ ...currentRefs, appliedDate });
+      (prisma.job.update as any).mockResolvedValue(jobData);
+
+      await updateJob({ ...jobData, dateApplied: new Date(appliedDate) });
+
+      expect((prisma.job.update as any).mock.calls[0][0].data).not.toHaveProperty(
+        "appliedDatePrecision",
+      );
+    });
     it("should handle unexpected errors", async () => {
       (getCurrentUser as any).mockResolvedValue(mockUser);
 
@@ -1304,6 +1336,10 @@ describe("jobActions", () => {
           statusId: jobData.status.id,
           applied: true,
           appliedDate: expect.any(Date),
+          // Written beside the date, never left behind: an imported job marked
+          // Applied again here would otherwise keep the journal's "day"
+          // qualifier on a timestamp stamped this second.
+          appliedDatePrecision: "exact",
         },
       });
     });

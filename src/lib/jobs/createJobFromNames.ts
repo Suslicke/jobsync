@@ -34,6 +34,7 @@ export interface CreateJobFromNamesInput {
   dueDate?: Date | null;
   applied?: boolean;
   appliedDate?: Date | null;
+  appliedDatePrecision?: string | null;
   jobUrl?: string;
   salaryRange?: string;
   tags?: string[];
@@ -66,6 +67,7 @@ export async function createJobFromNames(
     dueDate = null,
     applied = false,
     appliedDate,
+    appliedDatePrecision,
     jobUrl,
     salaryRange,
     tags = [],
@@ -136,6 +138,13 @@ export async function createJobFromNames(
     salaryRange: salaryRange ?? null,
     dueDate,
     appliedDate: resolvedAppliedDate,
+    // A date defaulted above is the moment of this write, so it is exact by
+    // construction; a date handed in is only as well known as the caller says.
+    appliedDatePrecision: appliedDate
+      ? (appliedDatePrecision ?? null)
+      : resolvedAppliedDate
+        ? "exact"
+        : null,
     // Markdown-rendered here, unlike UI-created jobs which store raw
     // Tiptap HTML directly — both are valid HTML for TipTapContentViewer,
     // but don't assume Tiptap-specific structure when reading this field.

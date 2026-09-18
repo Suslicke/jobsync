@@ -11,6 +11,7 @@ import {
   SERIES_COLORS,
   OTHER_COLOR,
   OTHER_SLICE_ID,
+  JOBS_BAR_COLOR,
   otherBucketLabel,
 } from "./jobsActivityChart";
 
@@ -153,7 +154,7 @@ export default function WeeklyBarChartToggle({
             colors={
               current.groupMode === "stacked"
                 ? (bar) => activityColors.get(String(bar.id)) ?? "#94a3b8"
-                : "#2a7ef0"
+                : JOBS_BAR_COLOR
             }
             enableTotals={current.groupMode === "stacked" ? true : false}
             valueFormat={(value) =>
