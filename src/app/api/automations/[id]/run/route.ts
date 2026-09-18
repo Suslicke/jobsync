@@ -96,7 +96,9 @@ export async function POST(
     if (aiSettings.provider === AiProvider.OLLAMA) {
       const baseUrl = await getOllamaBaseUrl(userId);
       const ollamaCheck = await PROVIDER_VERIFIERS.ollama(baseUrl);
-      if (!ollamaCheck.success) {
+      // AUTOMATION_ALLOW_UNSCORED lets the run proceed without a provider and
+      // save listings unscored for an agent to score later.
+      if (!ollamaCheck.success && process.env.AUTOMATION_ALLOW_UNSCORED !== "true") {
         return NextResponse.json(
           {
             success: false,

@@ -148,18 +148,29 @@ async function runAutomationTraced(
         const message =
           ollamaCheck.error ||
           "Ollama is not available. Please make sure Ollama is running.";
-        automationLogger.log(automation.id, "error", message);
-        automationLogger.endRun(automation.id);
+        // With AUTOMATION_ALLOW_UNSCORED the run continues without a provider:
+        // listings are collected, ranked and saved unscored, and an MCP agent
+        // scores them later (see lib/mcp/tools/getMatchQueue).
+        if (process.env.AUTOMATION_ALLOW_UNSCORED === "true") {
+          automationLogger.log(
+            automation.id,
+            "warning",
+            `${message} Continuing without AI: listings will be saved unscored.`,
+          );
+        } else {
+          automationLogger.log(automation.id, "error", message);
+          automationLogger.endRun(automation.id);
 
-        return await finalizeRun(run.id, {
-          status: "failed",
-          errorMessage: message,
-          jobsSearched: 0,
-          jobsDeduplicated: 0,
-          jobsProcessed: 0,
-          jobsMatched: 0,
-          jobsSaved: 0,
-        });
+          return await finalizeRun(run.id, {
+            status: "failed",
+            errorMessage: message,
+            jobsSearched: 0,
+            jobsDeduplicated: 0,
+            jobsProcessed: 0,
+            jobsMatched: 0,
+            jobsSaved: 0,
+          });
+        }
       }
     }
 
