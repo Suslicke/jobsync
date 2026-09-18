@@ -1,4 +1,5 @@
 import prisma from "@/lib/db";
+import { buildFitData } from "@/lib/fit/store";
 
 export async function createJobRecord(fields: {
   jobTitleId: string;
@@ -20,11 +21,25 @@ export async function createJobRecord(fields: {
   tagIds?: string[];
   createdVia?: string | null;
   descriptionCompleteness?: string | null;
+  /** Title text, when the caller already has it — saves a lookup. */
+  title?: string | null;
 }) {
-  const { tagIds = [], ...rest } = fields;
+  const { tagIds = [], title, ...rest } = fields;
+  // Every create passes through here, so the offline analysis is written once
+  // and the list never has to ask "why is this row grey" at render time.
+  const label =
+    title ??
+    (await prisma.jobTitle.findUnique({ where: { id: rest.jobTitleId }, select: { label: true } }))
+      ?.label ??
+    "";
+  const fitData = await buildFitData(rest.userId, {
+    title: label,
+    description: rest.description,
+  });
   return prisma.job.create({
     data: {
       ...rest,
+      fitData,
       createdAt: new Date(),
       ...(tagIds.length > 0 ? { tags: { connect: tagIds.map((id) => ({ id })) } } : {}),
     },

@@ -38,6 +38,8 @@ export const relocation = (text: unknown) => RE_RELOCATION.test(String(text ?? "
 
 export type FitData = {
   v: number;
+  /** Length of the cleaned description this was computed from. */
+  len: number;
   /** Stack share, or null when not measured — which is not the same as zero. */
   pct: number | null;
   termsScored: number;
@@ -99,6 +101,7 @@ export function analyseJob(
   const sponsor = sponsorship(desc);
   return {
     v: FIT_RULES_VERSION,
+    len: desc.length,
     pct: f.pct,
     termsScored: f.scored,
     stack: f.byTier,
@@ -118,11 +121,16 @@ export function analyseJob(
   };
 }
 
-/** Stored analysis is stale when the rules change or the description grows. */
+/**
+ * Stored analysis is stale when the rules change or the text does. Length is
+ * enough for the second case — a collector that brought a fuller description
+ * always changed it — and it never goes stale on its own, so a posting nobody
+ * can measure is not re-measured on every pass.
+ */
 export function isFitStale(fit: FitData | null, description: string): boolean {
   if (!fit) return true;
   if (fit.v !== FIT_RULES_VERSION) return true;
-  return fit.termsScored === 0 && cleanText(description).trim().length > 0;
+  return fit.len !== cleanText(description).length;
 }
 
 export function parseFitData(raw: string | null | undefined): FitData | null {

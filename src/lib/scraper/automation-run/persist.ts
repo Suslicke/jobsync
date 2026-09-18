@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { buildFitData } from "@/lib/fit/store";
 import { APP_CONSTANTS } from "@/lib/constants";
 import type { Automation, ScrapedJobData } from "@/models/automation.model";
 import type { JobDetails } from "../types";
@@ -51,8 +52,15 @@ export async function persistDiscoveredJob(
     skillTerms,
   });
 
+  // Discovered jobs skip createJobRecord, so the analysis is attached here
+  // instead — an automation run is exactly where an unmeasured row would hurt.
+  const fitData = await buildFitData(automation.userId, {
+    title: job.title,
+    description: job.description,
+  });
+
   try {
-    await db.job.create({ data: jobRecord });
+    await db.job.create({ data: { ...jobRecord, fitData } });
     return { saved: true, tagsApplied: jobRecord.tags?.connect.length ?? 0 };
   } catch (err: any) {
     if (err?.code === "P2002") return { saved: false, tagsApplied: 0 };

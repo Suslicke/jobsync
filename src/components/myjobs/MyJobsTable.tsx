@@ -25,6 +25,7 @@ import { TooltipProvider } from "../ui/tooltip";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { MatchJobButton } from "./MatchJobButton";
 import { CompanyLogo } from "./CompanyLogo";
+import { FitBadges } from "./FitBadges";
 
 type MyJobsTableProps = {
   jobs: JobResponse[];
@@ -144,6 +145,7 @@ function MyJobsTable({
                       </Badge>
                     )}
                   </div>
+                  <FitBadges fitData={job.fitData} className="mt-1" />
                 </TableCell>
                 <TableCell className="font-medium max-w-[100px] md:max-w-[160px]">
                   <span className="block truncate">{job.Company?.label}</span>

@@ -128,6 +128,7 @@ export async function createJobFromNames(
 
   const job = await createJobRecord({
     jobTitleId: resolvedTitle.id,
+    title: resolvedTitle.label,
     companyId: resolvedCompany.id,
     locationId: resolvedLocation?.id ?? null,
     statusId,

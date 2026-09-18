@@ -55,6 +55,8 @@ export interface JobResponse {
   CoverLetter?: CoverLetter;
   matchScore?: number | null;
   matchData?: string | null;
+  /** Offline analysis against the fit profile; see lib/fit. */
+  fitData?: string | null;
   tags?: Tag[];
   contactLinks?: JobContactLink[];
   createdVia?: string | null;

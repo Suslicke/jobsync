@@ -2,6 +2,7 @@
 import prisma from "@/lib/db";
 import { handleError } from "@/lib/utils";
 import { createJobRecord } from "@/lib/jobs/createJobRecord";
+import { refreshJobFit } from "@/lib/fit/store";
 import { AddJobFormSchema } from "@/models/addJobForm.schema";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -209,6 +210,8 @@ export const updateJob = async (
         tags: { set: tagIds.map((id) => ({ id })) },
       },
     });
+    // The title or the description may have changed, and both feed the analysis.
+    await refreshJobFit(job.id);
     revalidatePath("/dashboard");
     return { success: true, data: job };
   } catch (error) {

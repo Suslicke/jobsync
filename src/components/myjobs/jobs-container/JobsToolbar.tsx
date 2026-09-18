@@ -172,6 +172,11 @@ export function JobsToolbar({
               <SelectItem value="PT">Part-time</SelectItem>
               <SelectItem value="accepted">Accepted (discovered)</SelectItem>
               <SelectItem value="dismissed">Dismissed (discovered)</SelectItem>
+              <SelectSeparator />
+              <SelectLabel>Fit</SelectLabel>
+              <SelectItem value="fit-clear">No blockers</SelectItem>
+              <SelectItem value="fit-blocked">Has blockers</SelectItem>
+              <SelectItem value="fit-unmeasured">Not measured</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>

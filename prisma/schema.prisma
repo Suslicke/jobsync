@@ -409,6 +409,10 @@ model Job {
   // Word-count classification of `description` at write time:
   // "title-only" | "partial" | "full". Null for pre-existing/UI jobs.
   descriptionCompleteness String?
+  // Offline analysis of the posting against the user's fit profile (JSON):
+  // stack share, discipline, years demanded, language and visa blockers.
+  // Rebuilt when the rules version or the description changes.
+  fitData                 String?
 
   @@index([userId, automationId])
   @@index([userId, discoveryStatus])

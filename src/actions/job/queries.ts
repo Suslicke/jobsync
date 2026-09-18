@@ -22,6 +22,7 @@ const JOB_LIST_SELECT = {
   CoverLetter: true,
   matchScore: true,
   matchData: true,
+  fitData: true,
   discoveryStatus: true,
   _count: { select: { Notes: true } },
 };
@@ -94,7 +95,24 @@ const buildJobsWhereClause = (userId: string, filters: JobsListFilters) => {
     sourceValue,
   } = filters;
 
-  const filterBy = filter
+  // Fit filters read the stored analysis as text. SQLite has no JSON
+  // operators worth the trouble here, and these three shapes are stable:
+  // `"blockers":[]` means nothing stood in the way, `"pct":null` means the
+  // posting never said enough to measure.
+  const FIT_FILTERS: Record<string, object> = {
+    "fit-clear": { fitData: { contains: '"blockers":[]' } },
+    // Not an `AND` array: the dismissed-jobs rule below owns that key and
+    // would overwrite it.
+    "fit-blocked": {
+      fitData: { not: null },
+      NOT: { fitData: { contains: '"blockers":[]' } },
+    },
+    "fit-unmeasured": { fitData: { contains: '"pct":null' } },
+  };
+
+  const filterBy = filter && FIT_FILTERS[filter]
+    ? FIT_FILTERS[filter]
+    : filter
     ? filter === Object.keys(JOB_TYPES)[1]
       ? {
           jobType: filter,

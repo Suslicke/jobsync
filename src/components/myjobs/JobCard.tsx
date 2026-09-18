@@ -8,6 +8,7 @@ import { JobResponse, JobStatus } from "@/models/job.model";
 import { JobStatusBadge } from "./JobStatusBadge";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { MatchJobButton } from "./MatchJobButton";
+import { FitBadges } from "./FitBadges";
 import { CompanyLogo } from "./CompanyLogo";
 
 type JobCardProps = {
@@ -83,6 +84,8 @@ export function JobCard({
           </span>
         )}
       </div>
+
+      <FitBadges fitData={job.fitData} max={3} />
 
       <div className="mt-auto flex items-center justify-between border-t pt-3">
         <JobStatusBadge job={job} />

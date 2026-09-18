@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import prisma from "@/lib/db";
+import { refreshJobFit } from "@/lib/fit/store";
 import { APP_CONSTANTS } from "@/lib/constants";
 import { normalizeJobUrl } from "@/lib/scraper/utils";
 import { classifyDescriptionCompleteness } from "@/lib/jobs/descriptionCompleteness";
@@ -169,6 +170,9 @@ export async function updateJobFromNames(
     }
     throw error;
   }
+
+  // Title and description both feed the offline analysis; either may have moved.
+  await refreshJobFit(jobId);
 
   return {
     updated: true,
