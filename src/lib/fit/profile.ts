@@ -181,6 +181,12 @@ export const DEFAULT_PROFILE: FitProfile = {
       "аналитик\\s*1с", "финансов\\p{L}*\\s+аналитик", "продуктов\\p{L}*\\s+аналитик",
       "data.аналитик", "дизайнер", "тестировщик", "рекрутер", "маркетолог",
       "frontend", "front-end", "фронтенд", "фронт[- ]?энд", "верстальщик",
+      // Russian QA and internship titles: the first backfill showed
+      // "Стажер - инженер по тестированию Python" and "Senior AQA Python"
+      // passing as target roles, because `qa` cannot match inside `AQA` and
+      // the skip list knew only the noun "тестировщик".
+      "aqa", "qa[ -]?инженер", "тестирован\\p{L}*", "автотест\\p{L}*",
+      "стажер", "стажёр", "intern(?:ship)?",
     ],
     // A foreign language named in the title means 0 years on the questionnaire:
     // applying would be a lie about oneself.

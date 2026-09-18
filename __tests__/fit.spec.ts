@@ -103,6 +103,8 @@ describe("roleFit", () => {
     expect(fit("Remote Coding Tutor")).toBe("no");
     expect(fit("Data Analyst")).toBe("no");
     expect(fit("Тестировщик")).toBe("no");
+    expect(fit("Senior AQA Python (Platform V)")).toBe("no");
+    expect(fit("Стажер - инженер по тестированию Python")).toBe("no");
   });
 
   it("rejects a foreign stack or platform named in the title", () => {
