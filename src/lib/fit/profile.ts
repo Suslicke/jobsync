@@ -185,8 +185,12 @@ export const DEFAULT_PROFILE: FitProfile = {
     // A foreign language named in the title means 0 years on the questionnaire:
     // applying would be a lie about oneself.
     stack: [
-      "asp\\.net", "\\.net", "c#", "java", "php", "ruby", "rails", "salesforce",
-      "sap", "kotlin", "scala",
+      "asp\\.net", "\\.net", "c#", "c\\+\\+", "java", "php", "ruby", "rails",
+      "salesforce", "sap", "kotlin", "scala", "swift", "rust", "elixir",
+      // "Ведущий Go-разработчик" passed as a target role: the Russian word for
+      // developer is in the want list and no rule named the language. A title
+      // is the one place where a bare language name means the language.
+      "go", "golang",
     ],
     // A platform instead of a language. "Drupal/CMS Technical Lead" passed as a
     // target role: the title says Technical Lead and the stack list knew Java

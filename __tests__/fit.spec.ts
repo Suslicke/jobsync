@@ -109,6 +109,11 @@ describe("roleFit", () => {
     expect(roleFit("Senior Backend Engineer (Java)")).toEqual({ fit: "no", reason: "stack" });
     expect(roleFit("Drupal/CMS Technical Lead")).toEqual({ fit: "no", reason: "platform" });
     expect(fit("Senior Shopify Full Stack Developer")).toBe("no");
+    // A bare language name in a title IS the language, whatever the alphabet
+    // around it: "Ведущий Go-разработчик" used to pass as a target role.
+    expect(fit("Ведущий Go-разработчик")).toBe("no");
+    expect(fit("Senior Go Engineer")).toBe("no");
+    expect(fit("C++ Software Engineer")).toBe("no");
     expect(fit("Senior Full Stack Developer (React+Wordpress)")).toBe("no");
   });
 

@@ -66,7 +66,7 @@ export type FitData = {
  * changed while the description did not. Bump this and every cached analysis
  * expires by itself.
  */
-export const FIT_RULES_VERSION = 4;
+export const FIT_RULES_VERSION = 5;
 
 /** Analysis of one posting. Pure: same input, same record. */
 export function analyseJob(
