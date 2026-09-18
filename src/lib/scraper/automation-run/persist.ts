@@ -1,5 +1,5 @@
 import db from "@/lib/db";
-import { buildFitData } from "@/lib/fit/store";
+import { buildFitData, buildInitialReach } from "@/lib/fit/store";
 import { APP_CONSTANTS } from "@/lib/constants";
 import type { Automation, ScrapedJobData } from "@/models/automation.model";
 import type { JobDetails } from "../types";
@@ -59,8 +59,14 @@ export async function persistDiscoveredJob(
     description: job.description,
   });
 
+  const reach = await buildInitialReach(automation.userId, {
+    fitData,
+    title: job.title,
+    discoveredAt: jobRecord.discoveredAt,
+  });
+
   try {
-    await db.job.create({ data: { ...jobRecord, fitData } });
+    await db.job.create({ data: { ...jobRecord, fitData, ...reach } });
     return { saved: true, tagsApplied: jobRecord.tags?.connect.length ?? 0 };
   } catch (err: any) {
     if (err?.code === "P2002") return { saved: false, tagsApplied: 0 };

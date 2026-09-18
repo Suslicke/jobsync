@@ -9,12 +9,23 @@ import type {
 import { APP_CONSTANTS } from "@/lib/constants";
 import { formatError } from "./shared";
 
+// Orders the discovered pile can be read in. Reach is the point of the whole
+// exercise — half the pool arrives through automations, and triaging 400 rows
+// by AI match score is the ranking reachability exists to replace. Nulls last
+// in both directions: a row scored before the column existed has no number, and
+// SQLite would sort that silence to the top on `asc`.
+const DISCOVERED_SORT = {
+  matchScore: (dir: "asc" | "desc") => ({ matchScore: dir }),
+  discoveredAt: (dir: "asc" | "desc") => ({ discoveredAt: dir }),
+  reach: (dir: "asc" | "desc") => ({ reachScore: { sort: dir, nulls: "last" as const } }),
+} as const;
+
 export async function getDiscoveredJobs(options?: {
   automationId?: string;
   discoveryStatus?: DiscoveryStatus | DiscoveryStatus[];
   page?: number;
   limit?: number;
-  sortBy?: "matchScore" | "discoveredAt";
+  sortBy?: "matchScore" | "discoveredAt" | "reach";
   sortOrder?: "asc" | "desc";
 }): Promise<{
   success: boolean;
@@ -61,7 +72,7 @@ export async function getDiscoveredJobs(options?: {
         where,
         skip,
         take: limit,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: (DISCOVERED_SORT[sortBy] ?? DISCOVERED_SORT.matchScore)(sortOrder),
         include: {
           automation: {
             select: { id: true, name: true },

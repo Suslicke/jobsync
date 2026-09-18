@@ -44,12 +44,14 @@ export function AutomationDetailContainer({
     jobsLoadingMore,
     jobStatusCounts,
     statusFilter,
+    sortBy,
     loading,
     loadData,
     refreshJobs,
     loadMoreJobs,
     loadMoreRuns,
     handleStatusFilterChange,
+    handleSortByChange,
   } = useAutomationDetailData(automationId);
 
   const {
@@ -165,6 +167,8 @@ export function AutomationDetailContainer({
             acceptedCount={jobStatusCounts.accepted}
             statusFilter={statusFilter}
             onStatusFilterChange={handleStatusFilterChange}
+            sortBy={sortBy}
+            onSortByChange={handleSortByChange}
             automationId={automationId}
             onRefresh={loadData}
             onViewDetails={handleViewJobDetails}

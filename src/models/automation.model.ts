@@ -11,6 +11,9 @@ export type AutomationRunStatus =
   | "rate_limited"
   | "cancelled";
 export type DiscoveryStatus = "new" | "accepted" | "dismissed";
+// Order the discovered pile is read in. The server applies it across every
+// page, so the choice belongs to the query, not to the loaded slice.
+export type DiscoveredSortBy = "matchScore" | "reach" | "discoveredAt";
 export type JobBoard = "greenhouse" | "lever" | "ashby";
 
 export interface GreenhouseCompany {
@@ -137,6 +140,10 @@ export interface DiscoveredJob {
   locationId: string | null;
   matchScore: number;
   matchData: string | null;
+  // Reachability, already computed at insert time by the automation's persist
+  // step; the query uses `include`, so both fields come back with the row.
+  reachScore?: number | null;
+  reachData?: string | null;
   discoveryStatus: DiscoveryStatus;
   discoveredAt: Date;
   JobTitle: { label: string };

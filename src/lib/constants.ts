@@ -268,6 +268,10 @@ export const APP_CONSTANTS = {
 export const SCHEDULER_CONSTANTS = {
   ENABLED: true,
   CRON_EXPRESSION: "0 * * * *", // Every hour at minute 0
+  // Reachability refresh. Off the hour so it does not queue behind a scrape,
+  // and hourly because taste weights move with every decision the user records
+  // and freshness decays on its own.
+  REACH_CRON_EXPRESSION: "17 * * * *",
   STALE_RUN_TIMEOUT_MS: 15 * 60 * 1000, // 15 min; reaper cutoff for stuck runs
 } as const;
 

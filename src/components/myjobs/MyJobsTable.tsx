@@ -26,6 +26,7 @@ import { JobActionsMenu } from "./JobActionsMenu";
 import { MatchJobButton } from "./MatchJobButton";
 import { CompanyLogo } from "./CompanyLogo";
 import { FitBadges } from "./FitBadges";
+import { ReachBadge } from "./ReachBadge";
 
 type MyJobsTableProps = {
   jobs: JobResponse[];
@@ -114,6 +115,7 @@ function MyJobsTable({
             <SortableHead field="location" className="hidden md:table-cell">Location</SortableHead>
             <SortableHead field="status">Status</SortableHead>
             <SortableHead field="matchScore" className="hidden md:table-cell text-center">Match</SortableHead>
+            <SortableHead field="reach" className="hidden lg:table-cell text-center">Reach</SortableHead>
             <SortableHead field="source" className="hidden md:table-cell">Source</SortableHead>
             <TableHead>
               <span className="sr-only">Actions</span>
@@ -174,6 +176,9 @@ function MyJobsTable({
                   ) : (
                     <MatchJobButton jobId={job.id} />
                   )}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell text-center">
+                  <ReachBadge reachScore={job.reachScore} reachData={job.reachData} />
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   {job.JobSource?.label}

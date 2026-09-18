@@ -4,7 +4,13 @@
 // row grey" has an answer without recomputing anything, and so the list can be
 // filtered by it.
 
-import { DEFAULT_PROFILE, cleanText, type FitProfile, type FitTier } from "./profile";
+import {
+  DEFAULT_PROFILE,
+  cleanText,
+  profileKey,
+  type FitProfile,
+  type FitTier,
+} from "./profile";
 import { discipline, primaryLanguage, stackFit } from "./stack";
 import { outOfReach } from "./experience";
 import { foreignStack, needLanguage, roleFit } from "./roles";
@@ -40,6 +46,8 @@ export type FitData = {
   v: number;
   /** Length of the cleaned description this was computed from. */
   len: number;
+  /** Fingerprint of the profile this was measured against; see `isFitStale`. */
+  p: string;
   /** Stack share, or null when not measured — which is not the same as zero. */
   pct: number | null;
   termsScored: number;
@@ -102,6 +110,7 @@ export function analyseJob(
   return {
     v: FIT_RULES_VERSION,
     len: desc.length,
+    p: profileKey(profile),
     pct: f.pct,
     termsScored: f.scored,
     stack: f.byTier,
@@ -122,14 +131,27 @@ export function analyseJob(
 }
 
 /**
- * Stored analysis is stale when the rules change or the text does. Length is
- * enough for the second case — a collector that brought a fuller description
- * always changed it — and it never goes stale on its own, so a posting nobody
- * can measure is not re-measured on every pass.
+ * Stored analysis is stale when the rules change, the text changes, or the
+ * profile it was measured against does. Length is enough for the second case —
+ * a collector that brought a fuller description always changed it — and it
+ * never goes stale on its own, so a posting nobody can measure is not
+ * re-measured on every pass.
+ *
+ * The third case was missing and is the one the user actually triggers: moving
+ * Kubernetes from adjacent to core rewrites every percentage in the table while
+ * the version and the description length sit still, so "Profile saved; 0 jobs
+ * re-analyzed" was the honest report of a pass that could not see its own
+ * reason to run. An analysis written before `p` existed has none and is rebuilt
+ * once, which is what it needs anyway.
  */
-export function isFitStale(fit: FitData | null, description: string): boolean {
+export function isFitStale(
+  fit: FitData | null,
+  description: string,
+  profile: FitProfile,
+): boolean {
   if (!fit) return true;
   if (fit.v !== FIT_RULES_VERSION) return true;
+  if (fit.p !== profileKey(profile)) return true;
   return fit.len !== cleanText(description).length;
 }
 

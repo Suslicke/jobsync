@@ -4,8 +4,10 @@ import db from "@/lib/db";
 import { runAutomation, AutomationAlreadyRunningError } from "@/lib/scraper";
 import { ATS_BOARDS, type JobBoard } from "@/models/automation.model";
 import { log } from "@/lib/telemetry";
+import { refreshStaleReach } from "@/lib/fit/store";
 
 let scheduledTask: ScheduledTask | null = null;
+let reachTask: ScheduledTask | null = null;
 
 async function runDueAutomations() {
   const now = new Date();
@@ -160,6 +162,46 @@ export function stopScheduler() {
 
 export function isSchedulerRunning(): boolean {
   return scheduledTask !== null;
+}
+
+/** Rescore reachability for every user. Returns how many rows were written. */
+async function refreshAllReach(): Promise<number> {
+  let total = 0;
+  try {
+    const users = await db.user.findMany({ select: { id: true } });
+    for (const user of users) total += await refreshStaleReach(user.id);
+    if (total > 0) log.info("[Reach] Rescored jobs", { "reach.rescored": total });
+  } catch (error) {
+    log.error("[Reach] Refresh failed", { error: String(error) });
+  }
+  return total;
+}
+
+/**
+ * Its own task rather than a step inside `runDueAutomations`: that one is
+ * started only while an automation is active and stopped again the moment none
+ * is, so a refresh folded into it would never fire on an install that collects
+ * jobs from elsewhere.
+ */
+export function startReachRefresh() {
+  if (!SCHEDULER_CONSTANTS.ENABLED || reachTask) return;
+  const cronExpression = SCHEDULER_CONSTANTS.REACH_CRON_EXPRESSION;
+  if (!cron.validate(cronExpression)) {
+    log.error("[Reach] Invalid cron expression", { "reach.cron": cronExpression });
+    return;
+  }
+  reachTask = cron.schedule(cronExpression, refreshAllReach, {
+    timezone: process.env.TZ || "UTC",
+  });
+  log.info("[Reach] Refresh scheduled", { "reach.cron": cronExpression });
+}
+
+export function stopReachRefresh() {
+  if (reachTask) {
+    reachTask.stop();
+    reachTask = null;
+    log.info("[Reach] Refresh stopped");
+  }
 }
 
 // Marks any run stuck in "running" past the stale cutoff as failed. A hard kill

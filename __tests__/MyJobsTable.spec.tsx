@@ -129,7 +129,9 @@ describe("MyJobsTable", () => {
       expect(
         screen.queryByRole("link", { name: /match/i }),
       ).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /match/i })).toBeDisabled();
+      // Not by name: the column header is a sort button reading "Match" as
+      // well since the table learned to sort by that column.
+      expect(screen.getByTitle("The assistant is busy")).toBeDisabled();
     } finally {
       chat.busy = false;
     }

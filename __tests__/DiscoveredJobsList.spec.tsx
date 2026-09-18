@@ -49,6 +49,7 @@ function renderList(
   const onLoadMore = vi.fn();
   const onRefresh = vi.fn();
   const onStatusFilterChange = vi.fn();
+  const onSortByChange = vi.fn();
   const props: React.ComponentProps<typeof DiscoveredJobsList> = {
     jobs: [makeJob()],
     totalJobs: 1,
@@ -59,12 +60,14 @@ function renderList(
     acceptedCount: 0,
     statusFilter: ["new", "accepted"],
     onStatusFilterChange,
+    sortBy: "matchScore",
+    onSortByChange,
     automationId: "automation-1",
     onRefresh,
     ...overrides,
   };
   const result = render(<DiscoveredJobsList {...props} />);
-  return { ...result, onLoadMore, onRefresh, onStatusFilterChange };
+  return { ...result, onLoadMore, onRefresh, onStatusFilterChange, onSortByChange };
 }
 
 describe("DiscoveredJobsList", () => {

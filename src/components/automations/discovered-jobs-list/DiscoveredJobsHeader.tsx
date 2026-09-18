@@ -2,18 +2,28 @@
 
 import { CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ListFilter, Trash2 } from "lucide-react";
+import { ArrowDownWideNarrow, ListFilter, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DISCOVERY_STATUSES } from "@/lib/constants";
 import { RecordsCount } from "@/components/RecordsCount";
-import type { DiscoveryStatus } from "@/models/automation.model";
+import type { DiscoveredSortBy, DiscoveryStatus } from "@/models/automation.model";
+
+// Sorting lives in the header rather than in a column, because what it changes
+// is which rows get loaded at all, not how the loaded ones are arranged.
+const SORT_LABELS: Record<DiscoveredSortBy, string> = {
+  matchScore: "AI match",
+  reach: "Reachability",
+  discoveredAt: "Newest first",
+};
 
 interface DiscoveredJobsHeaderProps {
   loadedCount: number;
@@ -22,6 +32,8 @@ interface DiscoveredJobsHeaderProps {
   onClear: () => void;
   statusFilter: DiscoveryStatus[];
   onStatusFilterChange: (filter: DiscoveryStatus[]) => void;
+  sortBy: DiscoveredSortBy;
+  onSortByChange: (sortBy: DiscoveredSortBy) => void;
 }
 
 export function DiscoveredJobsHeader({
@@ -31,6 +43,8 @@ export function DiscoveredJobsHeader({
   onClear,
   statusFilter,
   onStatusFilterChange,
+  sortBy,
+  onSortByChange,
 }: DiscoveredJobsHeaderProps) {
   const toggleStatusFilter = (status: DiscoveryStatus, checked: boolean) => {
     onStatusFilterChange(
@@ -56,6 +70,28 @@ export function DiscoveredJobsHeader({
               Clear
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <ArrowDownWideNarrow className="h-4 w-4 mr-1.5" />
+                {SORT_LABELS[sortBy]}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuRadioGroup
+                value={sortBy}
+                onValueChange={(v) => onSortByChange(v as DiscoveredSortBy)}
+              >
+                {(Object.keys(SORT_LABELS) as DiscoveredSortBy[]).map((value) => (
+                  <DropdownMenuRadioItem key={value} value={value}>
+                    {SORT_LABELS[value]}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">

@@ -4,6 +4,7 @@ import { handleError } from "@/lib/utils";
 import { requireUser } from "./shared";
 import { revalidatePath } from "next/cache";
 import { parseFitData } from "@/lib/fit";
+import { refreshJobReach } from "@/lib/fit/store";
 import {
   MIN_DECISIONS,
   countReasons,
@@ -57,6 +58,11 @@ export const addJobFeedback = async (
         note: note || null,
       },
     });
+    // Only this row is rescored here. The decision also moves the taste
+    // weights, and with them every other row, but rewriting the whole table
+    // inside a dialog click would make it take as long as a profile save; the
+    // scheduled pass picks the rest up.
+    await refreshJobReach(jobId);
     revalidatePath("/dashboard");
     return { success: true, data: feedback };
   } catch (error) {
@@ -90,10 +96,11 @@ export const deleteJobFeedback = async (id: string): Promise<any | undefined> =>
     const user = await requireUser();
     const row = await prisma.jobFeedback.findFirst({
       where: { id, Job: { userId: user.id } },
-      select: { id: true },
+      select: { id: true, jobId: true },
     });
     if (!row) throw new Error("Feedback not found.");
     await prisma.jobFeedback.delete({ where: { id } });
+    await refreshJobReach(row.jobId);
     revalidatePath("/dashboard");
     return { success: true };
   } catch (error) {

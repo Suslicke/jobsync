@@ -10,7 +10,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Briefcase, Loader2 } from "lucide-react";
-import type { DiscoveredJob, DiscoveryStatus } from "@/models/automation.model";
+import type {
+  DiscoveredJob,
+  DiscoveredSortBy,
+  DiscoveryStatus,
+} from "@/models/automation.model";
 import { isAnalyzed } from "./discovered-jobs-list/matchData";
 import { useDiscoveredJobActions } from "./discovered-jobs-list/useDiscoveredJobActions";
 import { useJobsInfiniteScroll } from "./discovered-jobs-list/useJobsInfiniteScroll";
@@ -32,6 +36,8 @@ interface DiscoveredJobsListProps {
   acceptedCount: number;
   statusFilter: DiscoveryStatus[];
   onStatusFilterChange: (filter: DiscoveryStatus[]) => void;
+  sortBy: DiscoveredSortBy;
+  onSortByChange: (sortBy: DiscoveredSortBy) => void;
   automationId: string;
   onRefresh: () => void;
   onViewDetails?: (job: DiscoveredJob) => void;
@@ -52,6 +58,8 @@ export function DiscoveredJobsList({
   acceptedCount,
   statusFilter,
   onStatusFilterChange,
+  sortBy,
+  onSortByChange,
   automationId,
   onRefresh,
   onViewDetails,
@@ -73,14 +81,20 @@ export function DiscoveredJobsList({
 
   // Analyzed-first, then by matchScore desc (un-analyzed sort by their lexical
   // matchScore value). The analyzed flag lives in matchData JSON, so sort in JS.
+  //
+  // Only while the user is sorting by match, though: the other orders are
+  // applied by the server across the whole pile, and re-sorting the loaded
+  // slice here would show a different ranking than the one that decided which
+  // rows were loaded at all.
   const sortedJobs = useMemo(() => {
+    if (sortBy !== "matchScore") return jobs;
     return [...jobs].sort((a, b) => {
       const aa = isAnalyzed(a);
       const ba = isAnalyzed(b);
       if (aa !== ba) return aa ? -1 : 1;
       return b.matchScore - a.matchScore;
     });
-  }, [jobs]);
+  }, [jobs, sortBy]);
 
   const hasAnyJobs = dismissedCount + newCount + acceptedCount > 0;
 
@@ -110,6 +124,8 @@ export function DiscoveredJobsList({
         }}
         statusFilter={statusFilter}
         onStatusFilterChange={onStatusFilterChange}
+        sortBy={sortBy}
+        onSortByChange={onSortByChange}
       />
       <CardContent>
         {jobs.length === 0 ? (
@@ -129,6 +145,7 @@ export function DiscoveredJobsList({
                   <TableHead>Company</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead className="text-center">Pre-rank</TableHead>
+                  <TableHead className="text-center">Reach</TableHead>
                   <TableHead className="text-center">Match</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Discovered</TableHead>

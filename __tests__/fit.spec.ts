@@ -15,6 +15,7 @@ import {
   stackFit,
   yearsRequired,
   outOfReach,
+  isFitStale,
   DEFAULT_PROFILE,
   mergeProfile,
 } from "@/lib/fit";
@@ -256,6 +257,19 @@ describe("analyseJob", () => {
     });
     expect(old.yearsRequired).toBe(15);
     expect(old.blockers).toContain("15y required");
+  });
+
+  it("goes stale when the profile moves under it", () => {
+    const desc = "Kubernetes, Terraform, Python, FastAPI, PostgreSQL, Docker.";
+    const stored = analyseJob({ title: "Senior Backend Engineer", description: desc });
+    expect(isFitStale(stored, desc, DEFAULT_PROFILE)).toBe(false);
+    // Moving one technology between tiers rewrites the percentage while the
+    // rules version and the description length stand still. Keyed on those two
+    // alone, "Profile saved" rebuilt nothing at all.
+    const promoted = mergeProfile({
+      tiers: { ...DEFAULT_PROFILE.tiers, core: [...DEFAULT_PROFILE.tiers.core, "kubernetes"] },
+    });
+    expect(isFitStale(stored, desc, promoted)).toBe(true);
   });
 
   it("follows the profile, not the code", () => {

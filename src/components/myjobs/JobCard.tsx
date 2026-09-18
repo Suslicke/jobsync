@@ -9,6 +9,7 @@ import { JobStatusBadge } from "./JobStatusBadge";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { MatchJobButton } from "./MatchJobButton";
 import { FitBadges } from "./FitBadges";
+import { ReachBadge } from "./ReachBadge";
 import { CompanyLogo } from "./CompanyLogo";
 
 type JobCardProps = {
@@ -87,7 +88,10 @@ export function JobCard({
         )}
       </div>
 
-      <FitBadges fitData={job.fitData} max={3} />
+      <div className="flex flex-wrap items-center gap-1">
+        <FitBadges fitData={job.fitData} max={3} />
+        <ReachBadge reachScore={job.reachScore} reachData={job.reachData} />
+      </div>
 
       <div className="mt-auto flex items-center justify-between border-t pt-3">
         <JobStatusBadge job={job} />

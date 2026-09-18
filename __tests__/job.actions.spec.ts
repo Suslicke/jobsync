@@ -47,7 +47,12 @@ vi.mock("@prisma/client", () => {
       update: vi.fn(),
       count: vi.fn(),
     },
-    jobTitle: { count: vi.fn() },
+    // createJobRecord writes the offline analysis on every create, so the
+    // lookups behind it have to exist here even though this suite is about
+    // ownership and validation.
+    jobTitle: { count: vi.fn(), findUnique: vi.fn() },
+    userSettings: { findUnique: vi.fn() },
+    jobFeedback: { findMany: vi.fn() },
     company: { count: vi.fn() },
     resume: { count: vi.fn() },
     coverLetter: { count: vi.fn() },
@@ -103,6 +108,14 @@ describe("jobActions", () => {
     for (const model of refModels) {
       (prisma as any)[model].count.mockResolvedValue(1);
     }
+    // No stored profile and no decisions: the analysis still gets written, it
+    // is just the default one, which is all this suite needs it to be.
+    (prisma as any).jobTitle.findUnique.mockResolvedValue(null);
+    // updateJob re-runs the analysis afterwards; without a default here it
+    // would walk whatever job row an earlier test left on findUnique.
+    (prisma as any).job.findUnique.mockResolvedValue(null);
+    (prisma as any).userSettings.findUnique.mockResolvedValue(null);
+    (prisma as any).jobFeedback.findMany.mockResolvedValue([]);
   });
   describe("getStatusList", () => {
     it("should return status list on successful query", async () => {
@@ -1008,6 +1021,11 @@ describe("jobActions", () => {
           jobUrl: jobData.jobUrl,
           applied: jobData.applied,
           resumeId: jobData.resume,
+          // Written by createJobRecord for every job, so the list never has to
+          // ask at render time why a row is grey or where it ranks.
+          fitData: expect.any(String),
+          reachScore: expect.any(Number),
+          reachData: expect.any(String),
         },
       });
     });
@@ -1037,6 +1055,9 @@ describe("jobActions", () => {
           userId: mockUser.id,
           applied: jobData.applied,
           resumeId: jobData.resume,
+          fitData: expect.any(String),
+          reachScore: expect.any(Number),
+          reachData: expect.any(String),
         },
       });
       expect(result).toEqual({ data: jobData, success: true });

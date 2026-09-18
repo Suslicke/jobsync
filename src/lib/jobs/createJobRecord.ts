@@ -1,5 +1,5 @@
 import prisma from "@/lib/db";
-import { buildFitData } from "@/lib/fit/store";
+import { buildFitData, buildInitialReach } from "@/lib/fit/store";
 
 export async function createJobRecord(fields: {
   jobTitleId: string;
@@ -36,10 +36,12 @@ export async function createJobRecord(fields: {
     title: label,
     description: rest.description,
   });
+  const reach = await buildInitialReach(rest.userId, { fitData, title: label });
   return prisma.job.create({
     data: {
       ...rest,
       fitData,
+      ...reach,
       createdAt: new Date(),
       ...(tagIds.length > 0 ? { tags: { connect: tagIds.map((id) => ({ id })) } } : {}),
     },

@@ -414,9 +414,15 @@ model Job {
   // stack share, discipline, years demanded, language and visa blockers.
   // Rebuilt when the rules version or the description changes.
   fitData                 String?
+  // "Will an application reach a human", scored from the analysis above plus
+  // the contact, the decision and the date on this row. A scalar because the
+  // list sorts in SQL; `reachData` holds the terms behind it. See lib/fit/reach.
+  reachScore              Float?
+  reachData               String?
 
   @@index([userId, automationId])
   @@index([userId, discoveryStatus])
+  @@index([userId, reachScore])
   // Also has a hand-written partial unique index (not expressible here):
   // UNIQUE(userId, jobUrl) WHERE automationId IS NOT NULL
   // See migrations/20260710000002_job_automation_url_unique

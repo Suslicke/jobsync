@@ -44,7 +44,11 @@ describe("handleSaveMatchResult", () => {
     );
 
     expect(prisma.job.update).toHaveBeenCalledWith({
-      where: { id: "job-1", userId: "user-1", createdVia: { not: null } },
+      where: {
+        id: "job-1",
+        userId: "user-1",
+        OR: [{ createdVia: { not: null } }, { automationId: { not: null } }],
+      },
       data: {
         matchScore: 78,
         matchData: expect.any(String),
@@ -241,7 +245,11 @@ describe("handleSaveMatchResult", () => {
     );
 
     expect(prisma.job.findFirst).toHaveBeenCalledWith({
-      where: { id: "job-1", userId: "user-1", createdVia: { not: null } },
+      where: {
+        id: "job-1",
+        userId: "user-1",
+        OR: [{ createdVia: { not: null } }, { automationId: { not: null } }],
+      },
       select: { descriptionCompleteness: true },
     });
   });

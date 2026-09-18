@@ -57,6 +57,9 @@ export interface JobResponse {
   matchData?: string | null;
   /** Offline analysis against the fit profile; see lib/fit. */
   fitData?: string | null;
+  /** Reachability and the terms behind it; see lib/fit/reach. */
+  reachScore?: number | null;
+  reachData?: string | null;
   tags?: Tag[];
   contactLinks?: JobContactLink[];
   createdVia?: string | null;
@@ -192,6 +195,7 @@ export type JobSortField =
   | "location"
   | "status"
   | "matchScore"
+  | "reach"
   | "source"
   | "createdAt";
 export type JobSort = { field: JobSortField; dir: "asc" | "desc" };

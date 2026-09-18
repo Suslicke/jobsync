@@ -256,6 +256,27 @@ export function mergeProfile(partial?: Partial<FitProfile> | null): FitProfile {
   };
 }
 
+/**
+ * Cheap non-cryptographic hash (FNV-1a), for the cache keys that decide what
+ * has to be recomputed. They compare things too big to store beside the result
+ * — a whole analysis, a whole profile — and a key built from the SHAPE of those
+ * things instead (a version number, a text length) is how both caches in this
+ * folder went blind: the profile moved every percentage in the table while the
+ * version and the description length stayed exactly where they were.
+ */
+export function fingerprint(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/** Which profile an analysis was measured against; stored on it as `p`. */
+export const profileKey = (profile: FitProfile): string =>
+  fingerprint(JSON.stringify(profile));
+
 /** Tags and links are not the text of a posting: `ixlib=rails-4` is not Rails. */
 export function cleanText(text: unknown): string {
   return String(text ?? "")

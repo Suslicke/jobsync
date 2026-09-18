@@ -13,6 +13,9 @@ vi.mock("@prisma/client", () => {
     resume: { findUnique: vi.fn() },
     userSettings: { findUnique: vi.fn() },
     job: { findMany: vi.fn(), create: vi.fn() },
+    // Persisting a discovered job scores its reachability, which reads the
+    // user's own applied/passed decisions.
+    jobFeedback: { findMany: vi.fn(async () => []) },
     jobTitle: { findUnique: vi.fn(), create: vi.fn() },
     location: { findUnique: vi.fn(), create: vi.fn() },
     company: { findUnique: vi.fn(), create: vi.fn() },

@@ -12,6 +12,7 @@ import type {
   AutomationWithResume,
   AutomationRun,
   DiscoveredJob,
+  DiscoveredSortBy,
   DiscoveryStatus,
 } from "@/models/automation.model";
 import { APP_CONSTANTS } from "@/lib/constants";
@@ -47,15 +48,23 @@ export function useAutomationDetailData(automationId: string) {
   useEffect(() => {
     statusFilterRef.current = statusFilter;
   }, [statusFilter]);
+  const [sortBy, setSortBy] = useState<DiscoveredSortBy>("matchScore");
+  // Same reason as statusFilterRef: fetchJobs must not change identity when the
+  // order does, or the mount effect re-runs and flashes the loading state.
+  const sortByRef = useRef(sortBy);
+  useEffect(() => {
+    sortByRef.current = sortBy;
+  }, [sortBy]);
   const [loading, setLoading] = useState(true);
 
   const fetchJobs = useCallback(
-    (filter: DiscoveryStatus[], page = 1) =>
+    (filter: DiscoveryStatus[], page = 1, sort: DiscoveredSortBy = sortByRef.current) =>
       getDiscoveredJobs({
         automationId,
         discoveryStatus: filter,
         page,
         limit: APP_CONSTANTS.RECORDS_PER_PAGE,
+        sortBy: sort,
       }),
     [automationId],
   );
@@ -155,6 +164,21 @@ export function useAutomationDetailData(automationId: string) {
     [fetchJobs],
   );
 
+  const handleSortByChange = useCallback(
+    async (next: DiscoveredSortBy) => {
+      setSortBy(next);
+      // Paging is server-side, so a new order means a new first page: keeping
+      // the loaded rows would mix two rankings in one list.
+      const jobsResult = await fetchJobs(statusFilter, 1, next);
+      if (jobsResult.success && jobsResult.data) {
+        setJobs(jobsResult.data);
+        setTotalJobs(jobsResult.total ?? 0);
+        setJobsPage(1);
+      }
+    },
+    [fetchJobs, statusFilter],
+  );
+
   const loadMoreRuns = useCallback(async () => {
     setRunsLoadingMore(true);
     try {
@@ -183,11 +207,13 @@ export function useAutomationDetailData(automationId: string) {
     jobsLoadingMore,
     jobStatusCounts,
     statusFilter,
+    sortBy,
     loading,
     loadData,
     refreshJobs,
     loadMoreJobs,
     loadMoreRuns,
     handleStatusFilterChange,
+    handleSortByChange,
   };
 }

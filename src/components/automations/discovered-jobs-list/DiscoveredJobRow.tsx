@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { DiscoveredJob } from "@/models/automation.model";
 import { getWorkplaceTypeLabel } from "@/models/job.model";
+import { ReachBadge } from "@/components/myjobs/ReachBadge";
 import { isAnalyzed, getPrerankPercent } from "./matchData";
 
 interface DiscoveredJobRowProps {
@@ -93,6 +94,9 @@ export function DiscoveredJobRow({
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
+      </TableCell>
+      <TableCell className="text-center">
+        <ReachBadge reachScore={job.reachScore} reachData={job.reachData} />
       </TableCell>
       <TableCell className="text-center">
         {analyzed ? (

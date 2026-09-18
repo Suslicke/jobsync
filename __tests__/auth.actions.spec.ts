@@ -11,6 +11,9 @@ import { AuthError } from "next-auth";
 vi.mock("@/lib/db", () => {
   const mockPrisma = {
     user: {
+      // Signup closes itself once an instance has a user, so the action counts
+      // them before anything else; an empty instance is what these tests are.
+      count: vi.fn(),
       findUnique: vi.fn(),
       create: vi.fn(),
     },
@@ -61,6 +64,7 @@ vi.mock("next-auth", () => {
 describe("Auth Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.user.count as any).mockResolvedValue(0);
   });
 
   describe("signup", () => {

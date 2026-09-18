@@ -4,7 +4,7 @@ import { handleError } from "@/lib/utils";
 import { requireUser } from "./shared";
 import { revalidatePath } from "next/cache";
 import { DEFAULT_PROFILE, mergeProfile, type FitProfile } from "@/lib/fit";
-import { refreshStaleFits } from "@/lib/fit/store";
+import { refreshStaleFits, refreshStaleReach } from "@/lib/fit/store";
 
 // The fit profile is what makes the analysis personal: which technologies are
 // yours, which disciplines you target, how many years you have. It rides along
@@ -57,8 +57,15 @@ export const saveFitProfile = async (profileJson: string): Promise<any | undefin
     });
 
     const rebuilt = await refreshStaleFits(user.id);
+    // The profile decides which technologies are the user's, so it moves the
+    // analysis and the reachability built on top of it in the same breath.
+    const rescored = await refreshStaleReach(user.id);
     revalidatePath("/dashboard");
-    return { success: true, data: { rebuilt }, message: `Profile saved; ${rebuilt} jobs re-analyzed.` };
+    return {
+      success: true,
+      data: { rebuilt, rescored },
+      message: `Profile saved; ${rebuilt} jobs re-analyzed, ${rescored} rescored.`,
+    };
   } catch (error) {
     return handleError(error, "Failed to save fit profile.");
   }
@@ -69,10 +76,32 @@ export const recalculateFits = async (): Promise<any | undefined> => {
   try {
     const user = await requireUser();
     const rebuilt = await refreshStaleFits(user.id);
+    const rescored = await refreshStaleReach(user.id);
     revalidatePath("/dashboard");
-    return { success: true, data: { rebuilt }, message: `${rebuilt} jobs re-analyzed.` };
+    return {
+      success: true,
+      data: { rebuilt, rescored },
+      message: `${rebuilt} jobs re-analyzed, ${rescored} rescored.`,
+    };
   } catch (error) {
     return handleError(error, "Failed to recalculate fit data.");
+  }
+};
+
+/**
+ * Rescore reachability for every job it has moved for. Separate from the
+ * analysis because it goes stale for a different reason: one new decision
+ * changes the taste weights and with them every row in the table, and this
+ * pass never touches a description.
+ */
+export const recalculateReach = async (): Promise<any | undefined> => {
+  try {
+    const user = await requireUser();
+    const rescored = await refreshStaleReach(user.id);
+    revalidatePath("/dashboard");
+    return { success: true, data: { rescored }, message: `${rescored} jobs rescored.` };
+  } catch (error) {
+    return handleError(error, "Failed to recalculate reachability.");
   }
 };
 

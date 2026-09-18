@@ -23,6 +23,8 @@ const JOB_LIST_SELECT = {
   matchScore: true,
   matchData: true,
   fitData: true,
+  reachScore: true,
+  reachData: true,
   discoveryStatus: true,
   _count: { select: { Notes: true } },
 };
@@ -197,6 +199,11 @@ const JOB_SORT_FIELDS = {
   location: (dir: "asc" | "desc") => ({ Location: { label: dir } }),
   status: (dir: "asc" | "desc") => ({ Status: { label: dir } }),
   matchScore: (dir: "asc" | "desc") => ({ matchScore: dir }),
+  // Nulls last in both directions: a job written before the column existed has
+  // no score, and SQLite would otherwise sort that silence to the top on `asc`
+  // — "not measured" read as an answer, the mistake this fork has already paid
+  // for six times.
+  reach: (dir: "asc" | "desc") => ({ reachScore: { sort: dir, nulls: "last" as const } }),
   source: (dir: "asc" | "desc") => ({ JobSource: { label: dir } }),
   createdAt: (dir: "asc" | "desc") => ({ createdAt: dir }),
 } as const;

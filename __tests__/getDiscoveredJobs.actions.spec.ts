@@ -61,4 +61,27 @@ describe("getDiscoveredJobs status filtering", () => {
     const countWhere = (prisma.job.groupBy as any).mock.calls[0][0].where;
     expect(countWhere.discoveryStatus).toBeUndefined();
   });
+
+  it("sorts by reachability with unscored rows last in both directions", async () => {
+    // Half the pool arrives through automations, and the only order this view
+    // offered was the AI match score that reachability exists to replace. Nulls
+    // last because a row scored before the column existed has no number, and
+    // SQLite reads that silence as the smallest value of all.
+    await getDiscoveredJobs({ sortBy: "reach", sortOrder: "desc" });
+    expect((prisma.job.findMany as any).mock.calls[0][0].orderBy).toEqual({
+      reachScore: { sort: "desc", nulls: "last" },
+    });
+
+    await getDiscoveredJobs({ sortBy: "reach", sortOrder: "asc" });
+    expect((prisma.job.findMany as any).mock.calls[1][0].orderBy).toEqual({
+      reachScore: { sort: "asc", nulls: "last" },
+    });
+  });
+
+  it("still defaults to the AI match score", async () => {
+    await getDiscoveredJobs({});
+    expect((prisma.job.findMany as any).mock.calls[0][0].orderBy).toEqual({
+      matchScore: "desc",
+    });
+  });
 });

@@ -15,7 +15,9 @@ const prisma = new PrismaClient();
 
 vi.mock("@prisma/client", () => {
   const mPrismaClient = {
-    job: { findFirst: vi.fn(), update: vi.fn() },
+    // findUnique belongs to the analysis refresh that follows every update;
+    // it is left resolving null so this suite stays about the resolution.
+    job: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   };
   return { PrismaClient: vi.fn(function () { return mPrismaClient; }) };
 });
@@ -42,6 +44,7 @@ describe("updateJobFromNames", () => {
       descriptionCompleteness: "title-only",
     });
     (prisma.job.update as any).mockResolvedValue({ id: "job-1" });
+    (prisma.job.findUnique as any).mockResolvedValue(null);
     (resolveCompany as any).mockResolvedValue({ id: "company-1", label: "Acme", created: false });
     (resolveJobTitle as any).mockResolvedValue({ id: "title-1", label: "Engineer", created: false });
     (resolveLocation as any).mockResolvedValue({ id: "loc-1", label: "Remote", created: true });
