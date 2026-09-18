@@ -134,9 +134,10 @@ export const getTasteSummary = async (): Promise<any | undefined> => {
         applied: applied.length,
         passed: passed.length,
         rejected: rows.filter((r) => r.kind === "rejected").length,
-        // Fewer decisions than this and the weights are noise, so the UI says
-        // "not measured yet" instead of showing a confident ranking.
-        measured: applied.length + passed.length >= MIN_DECISIONS,
+        // Both sides have to be populated: weights are a comparison, and
+        // comparing against an empty set makes every term look positive.
+        measured:
+          applied.length >= MIN_DECISIONS && passed.length >= MIN_DECISIONS,
         liked: countReasons(applied.map((r) => parseList(r.liked))).slice(0, 10),
         worried: countReasons(applied.map((r) => parseList(r.disliked))).slice(0, 10),
         passReasons: countReasons(passed.map((r) => parseList(r.disliked))).slice(0, 10),

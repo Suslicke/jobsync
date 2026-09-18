@@ -15,7 +15,12 @@ import type { FitData } from ".";
 export const MIN_SEEN = 2;
 /** Smoothing: without it one pass on a rare technology gives infinite weight. */
 const SMOOTH = 1;
-/** Below this many decisions the taste is not measured at all. */
+/**
+ * Below this many decisions ON EACH SIDE the taste is not measured at all.
+ * Weights compare two distributions, so a hundred applications against three
+ * passes measures nothing: every term the user ever applied to comes out
+ * positive simply because the other side is empty.
+ */
 export const MIN_DECISIONS = 5;
 
 const TIERS = ["core", "strong", "supporting", "adjacent", "alien"] as const;

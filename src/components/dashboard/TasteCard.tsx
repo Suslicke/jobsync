@@ -38,7 +38,17 @@ function Terms({ title, rows }: { title: string; rows: [string, number][] }) {
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
-      <p className="text-sm leading-relaxed">{rows.map(([t]) => t).join(", ")}</p>
+      <ul className="space-y-0.5 text-sm">
+        {rows.map(([term, weight]) => (
+          <li key={term} className="flex justify-between gap-2">
+            <span className="truncate">{term}</span>
+            <span className="tabular-nums text-muted-foreground">
+              {weight > 0 ? "+" : ""}
+              {weight.toFixed(2)}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -47,7 +57,6 @@ export default async function TasteCard() {
   const result = await getTasteSummary();
   if (!result?.success) return null;
   const taste = result.data;
-  const decisions = taste.applied + taste.passed;
 
   return (
     <Card>
@@ -70,9 +79,10 @@ export default async function TasteCard() {
           </div>
         ) : (
           <p className="border-t pt-3 text-sm text-muted-foreground">
-            Technology weights need at least {MIN_DECISIONS} of your own decisions
-            to mean anything — {decisions} so far. An unmeasured signal is not a
-            zero, so it stays out of the ranking until then.
+            Technology weights compare what you applied to against what you
+            passed over, so both sides need at least {MIN_DECISIONS} decisions —
+            {" "}{taste.applied} and {taste.passed} so far. An unmeasured signal
+            is not a zero, so it stays out of the ranking until then.
           </p>
         )}
       </CardContent>
