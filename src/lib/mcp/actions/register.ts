@@ -23,7 +23,7 @@ const DENY = new Set(["signup", "authenticate", "createMcpToken", "getOllamaBase
 
 // Domains that get one MCP tool per action. The rest stay reachable through
 // call_action, so the tool list does not flood the agent's context.
-const DEFAULT_TOOL_DOMAINS = ["profile", "question", "task", "job", "note", "contact", "automation", "fit"];
+const DEFAULT_TOOL_DOMAINS = ["profile", "question", "task", "job", "note", "contact", "automation", "fit", "feedback"];
 
 const MAX_RESULT_CHARS = 40_000;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;

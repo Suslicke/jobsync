@@ -36,6 +36,7 @@ type MyJobsTableProps = {
   editJob: (id: string) => void;
   onChangeJobStatus: (id: string, status: JobStatus) => void;
   onAddNote: (jobId: string) => void;
+  onFeedback?: (job: JobResponse, kind: "applied" | "passed") => void;
 };
 
 function MyJobsTable({
@@ -47,6 +48,7 @@ function MyJobsTable({
   editJob,
   onChangeJobStatus,
   onAddNote,
+  onFeedback,
 }: MyJobsTableProps) {
   const [alertOpen, setAlertOpen] = useState(false);
   const [jobIdToDelete, setJobIdToDelete] = useState("");
@@ -183,6 +185,7 @@ function MyJobsTable({
                     editJob={editJob}
                     onChangeJobStatus={onChangeJobStatus}
                     onAddNote={onAddNote}
+                    onFeedback={onFeedback}
                     onDeleteJob={onDeleteJob}
                   />
                 </TableCell>

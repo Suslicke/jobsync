@@ -393,6 +393,7 @@ model Job {
   CoverLetter   CoverLetter? @relation(fields: [coverLetterId], references: [id])
   coverLetterId String?
   Notes         Note[]
+  Feedback      JobFeedback[]
   tags        Tag[]
   contactLinks  JobContact[]
 
@@ -419,6 +420,28 @@ model Job {
   // Also has a hand-written partial unique index (not expressible here):
   // UNIQUE(userId, jobUrl) WHERE automationId IS NOT NULL
   // See migrations/20260710000002_job_automation_url_unique
+}
+
+// Why a job was applied to or passed over, in the user's own words plus a few
+// chips. An application says "this will do"; a pass names a boundary, and the
+// boundary is the stronger signal — it is what the taste weights are built from.
+model JobFeedback {
+  id        String   @id @default(uuid())
+  jobId     String
+  Job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  // "applied" | "passed" | "rejected". A rejection is THEIR decision and never
+  // feeds taste; a pass is the user's own and always does.
+  kind      String
+  // How the application was sent: site form, Easy Apply, email, recruiter.
+  how       String?
+  // JSON arrays of chip labels.
+  liked     String   @default("[]")
+  disliked  String   @default("[]")
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([jobId])
+  @@index([kind])
 }
 
 model ActivityType {

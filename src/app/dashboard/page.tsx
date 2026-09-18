@@ -10,6 +10,7 @@ import ActivityCalendar from "@/components/dashboard/ActivityCalendar";
 import JobsActivityCard from "@/components/dashboard/JobsActivityCard";
 import JobsApplied from "@/components/dashboard/JobsAppliedCard";
 import RecentCardToggle from "@/components/dashboard/RecentCardToggle";
+import TasteCard from "@/components/dashboard/TasteCard";
 import WeeklyBarChartToggle from "@/components/dashboard/WeeklyBarChartToggle";
 
 import { Metadata } from "next";
@@ -69,6 +70,9 @@ export default async function Dashboard() {
       </div>
       <div className="@3xl/main:relative @3xl/main:self-stretch">
         <RecentCardToggle jobs={recentJobs} activities={recentActivities} />
+      </div>
+      <div className="w-full col-span-3">
+        <TasteCard />
       </div>
       <div className="w-full col-span-3">
         <ActivityCalendar

@@ -1,5 +1,14 @@
 "use client";
-import { ListCollapse, MoreVertical, Pencil, StickyNote, Tags, Trash } from "lucide-react";
+import {
+  CircleSlash,
+  ListCollapse,
+  MoreVertical,
+  Pencil,
+  Send,
+  StickyNote,
+  Tags,
+  Trash,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
@@ -25,6 +34,7 @@ type JobActionsMenuProps = {
   onChangeJobStatus: (id: string, status: JobStatus) => void;
   onAddNote: (jobId: string) => void;
   onDeleteJob: (jobId: string) => void;
+  onFeedback?: (job: JobResponse, kind: "applied" | "passed") => void;
 };
 
 export function JobActionsMenu({
@@ -34,6 +44,7 @@ export function JobActionsMenu({
   onChangeJobStatus,
   onAddNote,
   onDeleteJob,
+  onFeedback,
 }: JobActionsMenuProps) {
   const router = useRouter();
 
@@ -74,6 +85,25 @@ export function JobActionsMenu({
             <StickyNote className="mr-2 h-4 w-4" />
             Add a Note
           </DropdownMenuItem>
+          {onFeedback && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => onFeedback(job, "applied")}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                I applied&hellip;
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => onFeedback(job, "passed")}
+              >
+                <CircleSlash className="mr-2 h-4 w-4" />
+                Not applying&hellip;
+              </DropdownMenuItem>
+            </>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>

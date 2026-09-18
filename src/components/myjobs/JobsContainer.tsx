@@ -11,6 +11,7 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import {
   Company,
   JobLocation,
+  JobResponse,
   JobSource,
   JobStatus,
   JobTitle,
@@ -21,6 +22,7 @@ import { useRouter } from "next/navigation";
 import MyJobsTable from "./MyJobsTable";
 import MyJobsGrid from "./MyJobsGrid";
 import { NoteDialog } from "./NoteDialog";
+import { JobFeedbackDialog } from "./JobFeedbackDialog";
 import { useJobFilters } from "./jobs-container/useJobFilters";
 import { useJobsList } from "./jobs-container/useJobsList";
 import { downloadJobsList } from "./jobs-container/downloadJobsCsv";
@@ -47,6 +49,10 @@ function JobsContainer({
   const [editJob, setEditJob] = useState(null);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [noteJobId, setNoteJobId] = useState("");
+  const [feedbackTarget, setFeedbackTarget] = useState<{
+    job: JobResponse;
+    kind: "applied" | "passed";
+  } | null>(null);
 
   const {
     queryParams,
@@ -113,9 +119,27 @@ function JobsContainer({
     if (success) {
       router.refresh();
       toastSuccess(`Job has been updated successfully`);
+      // The status is already saved; the form that follows is optional and asks
+      // what mattered while the reason is still in the user's head.
+      if (jobStatus.value === "applied") {
+        const job = jobs.find((j) => j.id === jobId);
+        if (job) setFeedbackTarget({ job, kind: "applied" });
+      }
     } else {
       toastError(message);
     }
+    reloadJobs();
+  };
+
+  const onFeedback = (job: JobResponse, kind: "applied" | "passed") =>
+    setFeedbackTarget({ job, kind });
+
+  // Passing on a job is a decision about the list, not only about the record:
+  // the row leaves the working list once its reason is written down.
+  const onFeedbackSaved = async () => {
+    if (feedbackTarget?.kind !== "passed") return;
+    const archived = statuses.find((s) => s.value === "archived");
+    if (archived) await updateJobStatus(feedbackTarget.job.id, archived);
     reloadJobs();
   };
 
@@ -172,6 +196,7 @@ function JobsContainer({
                 editJob={onEditJob}
                 onChangeJobStatus={onChangeJobStatus}
                 onAddNote={onAddNote}
+                onFeedback={onFeedback}
               />
             ) : (
               <MyJobsTable
@@ -183,6 +208,7 @@ function JobsContainer({
                 editJob={onEditJob}
                 onChangeJobStatus={onChangeJobStatus}
                 onAddNote={onAddNote}
+                onFeedback={onFeedback}
               />
             ))}
           {jobs.length < totalJobs && (
@@ -195,6 +221,16 @@ function JobsContainer({
         </CardContent>
         <CardFooter></CardFooter>
       </Card>
+      {feedbackTarget && (
+        <JobFeedbackDialog
+          open={true}
+          onOpenChange={(open) => !open && setFeedbackTarget(null)}
+          jobId={feedbackTarget.job.id}
+          kind={feedbackTarget.kind}
+          jobTitle={feedbackTarget.job.JobTitle?.label}
+          onSaved={onFeedbackSaved}
+        />
+      )}
       <NoteDialog
         open={noteDialogOpen}
         onOpenChange={setNoteDialogOpen}

@@ -21,33 +21,34 @@ import * as m16 from "@/actions/contact/mutations";
 import * as m17 from "@/actions/contact/queries";
 import * as m18 from "@/actions/contactRole.actions";
 import * as m19 from "@/actions/coverLetter.actions";
-import * as m20 from "@/actions/fit.actions";
-import * as m21 from "@/actions/job/mutations";
-import * as m22 from "@/actions/job/queries";
-import * as m23 from "@/actions/job/references";
-import * as m24 from "@/actions/job/status";
-import * as m25 from "@/actions/jobLocation.actions";
-import * as m26 from "@/actions/jobSource.actions";
-import * as m27 from "@/actions/jobtitle.actions";
-import * as m28 from "@/actions/mcpToken.actions";
-import * as m29 from "@/actions/note.actions";
-import * as m30 from "@/actions/profile/certification";
-import * as m31 from "@/actions/profile/contactInfo";
-import * as m32 from "@/actions/profile/defaultResume";
-import * as m33 from "@/actions/profile/education";
-import * as m34 from "@/actions/profile/experience";
-import * as m35 from "@/actions/profile/files";
-import * as m36 from "@/actions/profile/resume";
-import * as m37 from "@/actions/profile/resumeCopy";
-import * as m38 from "@/actions/profile/skills";
-import * as m39 from "@/actions/profile/summary";
-import * as m40 from "@/actions/question.actions";
-import * as m41 from "@/actions/resumeImport.actions";
-import * as m42 from "@/actions/tag.actions";
-import * as m43 from "@/actions/task/activity";
-import * as m44 from "@/actions/task/mutations";
-import * as m45 from "@/actions/task/queries";
-import * as m46 from "@/actions/userSettings.actions";
+import * as m20 from "@/actions/feedback.actions";
+import * as m21 from "@/actions/fit.actions";
+import * as m22 from "@/actions/job/mutations";
+import * as m23 from "@/actions/job/queries";
+import * as m24 from "@/actions/job/references";
+import * as m25 from "@/actions/job/status";
+import * as m26 from "@/actions/jobLocation.actions";
+import * as m27 from "@/actions/jobSource.actions";
+import * as m28 from "@/actions/jobtitle.actions";
+import * as m29 from "@/actions/mcpToken.actions";
+import * as m30 from "@/actions/note.actions";
+import * as m31 from "@/actions/profile/certification";
+import * as m32 from "@/actions/profile/contactInfo";
+import * as m33 from "@/actions/profile/defaultResume";
+import * as m34 from "@/actions/profile/education";
+import * as m35 from "@/actions/profile/experience";
+import * as m36 from "@/actions/profile/files";
+import * as m37 from "@/actions/profile/resume";
+import * as m38 from "@/actions/profile/resumeCopy";
+import * as m39 from "@/actions/profile/skills";
+import * as m40 from "@/actions/profile/summary";
+import * as m41 from "@/actions/question.actions";
+import * as m42 from "@/actions/resumeImport.actions";
+import * as m43 from "@/actions/tag.actions";
+import * as m44 from "@/actions/task/activity";
+import * as m45 from "@/actions/task/mutations";
+import * as m46 from "@/actions/task/queries";
+import * as m47 from "@/actions/userSettings.actions";
 import { AddCompanyFormSchema } from "@/models/addCompanyForm.schema";
 import { AddJobFormSchema } from "@/models/addJobForm.schema";
 import { NoteFormSchema } from "@/models/note.schema";
@@ -135,81 +136,85 @@ export const MCP_ACTIONS: Record<string, McpActionEntry> = {
   "coverLetter.updateCoverLetter": { fn: m19.updateCoverLetter as any, signature: "id: string, title: string, content: string", params: [{"name":"id","type":"string","optional":false},{"name":"title","type":"string","optional":false},{"name":"content","type":"string","optional":false}], doc: "", schemas: {  } },
   "coverLetter.deleteCoverLetterById": { fn: m19.deleteCoverLetterById as any, signature: "coverLetterId: string", params: [{"name":"coverLetterId","type":"string","optional":false}], doc: "", schemas: {  } },
   "coverLetter.generateCoverLetterForJob": { fn: m19.generateCoverLetterForJob as any, signature: "jobId: string, markdown: string", params: [{"name":"jobId","type":"string","optional":false},{"name":"markdown","type":"string","optional":false}], doc: "", schemas: {  } },
-  "fit.getFitProfile": { fn: m20.getFitProfile as any, signature: "", params: [], doc: "The stored profile, with defaults filled in for anything unset.", schemas: {  } },
-  "fit.saveFitProfile": { fn: m20.saveFitProfile as any, signature: "profileJson: string", params: [{"name":"profileJson","type":"string","optional":false}], doc: "Replace the profile with `profileJson`, or reset to the default when it is empty. Every stored analysis goes stale on a change, so they are rebuilt right here rather than left to drift.", schemas: {  } },
-  "fit.recalculateFits": { fn: m20.recalculateFits as any, signature: "", params: [], doc: "Re-analyze every job whose stored analysis is out of date.", schemas: {  } },
-  "job.addJob": { fn: m21.addJob as any, signature: "data: z.infer<typeof AddJobFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddJobFormSchema>","optional":false}], doc: "", schemas: { AddJobFormSchema } },
-  "job.updateJob": { fn: m21.updateJob as any, signature: "data: z.infer<typeof AddJobFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddJobFormSchema>","optional":false}], doc: "", schemas: { AddJobFormSchema } },
-  "job.deleteJobById": { fn: m21.deleteJobById as any, signature: "jobId: string,", params: [{"name":"jobId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "job.getJobsList": { fn: m22.getJobsList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, filter?: string, search?: string, companyValue?: string, appliedOnly?: boolean, titleValue?: string, locationValue?: string, sourceValue?: string, sort?: JobSort[],", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"filter","type":"string","optional":true},{"name":"search","type":"string","optional":true},{"name":"companyValue","type":"string","optional":true},{"name":"appliedOnly","type":"boolean","optional":true},{"name":"titleValue","type":"string","optional":true},{"name":"locationValue","type":"string","optional":true},{"name":"sourceValue","type":"string","optional":true},{"name":"sort","type":"JobSort[]","optional":true}], doc: "", schemas: {  } },
-  "job.getJobDetails": { fn: m22.getJobDetails as any, signature: "jobId: string,", params: [{"name":"jobId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "job.getStatusList": { fn: m23.getStatusList as any, signature: "", params: [], doc: "JobStatus is global reference data with no createdBy column, so unlike every other list here it is not scoped to the current user.", schemas: {  } },
-  "job.getJobSourceList": { fn: m23.getJobSourceList as any, signature: "", params: [], doc: "", schemas: {  } },
-  "job.createLocation": { fn: m23.createLocation as any, signature: "label: string,", params: [{"name":"label","type":"string","optional":false}], doc: "", schemas: {  } },
-  "job.createJobSource": { fn: m23.createJobSource as any, signature: "label: string,", params: [{"name":"label","type":"string","optional":false}], doc: "", schemas: {  } },
-  "job.updateJobStatus": { fn: m24.updateJobStatus as any, signature: "jobId: string, status: JobStatus,", params: [{"name":"jobId","type":"string","optional":false},{"name":"status","type":"JobStatus","optional":false}], doc: "", schemas: {  } },
-  "job.saveJobMatchResult": { fn: m24.saveJobMatchResult as any, signature: "jobId: string, matchScore: number, matchData: string,", params: [{"name":"jobId","type":"string","optional":false},{"name":"matchScore","type":"number","optional":false},{"name":"matchData","type":"string","optional":false}], doc: "", schemas: {  } },
-  "jobLocation.getAllJobLocations": { fn: m25.getAllJobLocations as any, signature: "", params: [], doc: "", schemas: {  } },
-  "jobLocation.getJobLocationsList": { fn: m25.getJobLocationsList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, countBy?: string, search?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"countBy","type":"string","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
-  "jobLocation.deleteJobLocationById": { fn: m25.deleteJobLocationById as any, signature: "locationId: string", params: [{"name":"locationId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "jobSource.getJobSourceList": { fn: m26.getJobSourceList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, countBy?: string, search?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"countBy","type":"string","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
-  "jobSource.deleteJobSourceById": { fn: m26.deleteJobSourceById as any, signature: "jobSourceId: string", params: [{"name":"jobSourceId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "jobtitle.getAllJobTitles": { fn: m27.getAllJobTitles as any, signature: "", params: [], doc: "", schemas: {  } },
-  "jobtitle.getJobTitleList": { fn: m27.getJobTitleList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, countBy?: string, search?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"countBy","type":"string","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
-  "jobtitle.createJobTitle": { fn: m27.createJobTitle as any, signature: "label: string", params: [{"name":"label","type":"string","optional":false}], doc: "", schemas: {  } },
-  "jobtitle.deleteJobTitleById": { fn: m27.deleteJobTitleById as any, signature: "jobTitleId: string", params: [{"name":"jobTitleId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "mcpToken.listMcpTokens": { fn: m28.listMcpTokens as any, signature: "", params: [], doc: "", schemas: {  } },
-  "mcpToken.revokeMcpToken": { fn: m28.revokeMcpToken as any, signature: "id: string", params: [{"name":"id","type":"string","optional":false}], doc: "", schemas: {  } },
-  "note.getNotesByJobId": { fn: m29.getNotesByJobId as any, signature: "jobId: string", params: [{"name":"jobId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "note.addNote": { fn: m29.addNote as any, signature: "data: z.infer<typeof NoteFormSchema>", params: [{"name":"data","type":"z.infer<typeof NoteFormSchema>","optional":false}], doc: "", schemas: { NoteFormSchema } },
-  "note.updateNote": { fn: m29.updateNote as any, signature: "data: z.infer<typeof NoteFormSchema>", params: [{"name":"data","type":"z.infer<typeof NoteFormSchema>","optional":false}], doc: "", schemas: { NoteFormSchema } },
-  "note.deleteNote": { fn: m29.deleteNote as any, signature: "noteId: string", params: [{"name":"noteId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.addCertification": { fn: m30.addCertification as any, signature: "data: z.infer<typeof AddCertificationFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddCertificationFormSchema>","optional":false}], doc: "", schemas: { AddCertificationFormSchema } },
-  "profile.updateCertification": { fn: m30.updateCertification as any, signature: "data: z.infer<typeof AddCertificationFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddCertificationFormSchema>","optional":false}], doc: "", schemas: { AddCertificationFormSchema } },
-  "profile.addContactInfo": { fn: m31.addContactInfo as any, signature: "data: z.infer<typeof AddContactInfoFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddContactInfoFormSchema>","optional":false}], doc: "", schemas: { AddContactInfoFormSchema } },
-  "profile.updateContactInfo": { fn: m31.updateContactInfo as any, signature: "data: z.infer<typeof AddContactInfoFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddContactInfoFormSchema>","optional":false}], doc: "", schemas: { AddContactInfoFormSchema } },
-  "profile.getDefaultContactInfo": { fn: m31.getDefaultContactInfo as any, signature: "", params: [], doc: "Returns a bare value rather than a result envelope, matching the shape of getDefaultResumeId next door. Null means \"no letterhead\" — the letter then degrades to date + body. getCurrentUser, not this module's usual requireUser: \"no session\" has to return null like every other no-letterhead case, not ", schemas: {  } },
-  "profile.getDefaultResumeId": { fn: m32.getDefaultResumeId as any, signature: "", params: [], doc: "", schemas: {  } },
-  "profile.setDefaultResume": { fn: m32.setDefaultResume as any, signature: "resumeId: string,", params: [{"name":"resumeId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.addEducation": { fn: m33.addEducation as any, signature: "data: z.infer<typeof AddEducationFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddEducationFormSchema>","optional":false}], doc: "", schemas: { AddEducationFormSchema } },
-  "profile.updateEducation": { fn: m33.updateEducation as any, signature: "data: z.infer<typeof AddEducationFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddEducationFormSchema>","optional":false}], doc: "", schemas: { AddEducationFormSchema } },
-  "profile.addExperience": { fn: m34.addExperience as any, signature: "data: z.infer<typeof AddExperienceFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddExperienceFormSchema>","optional":false}], doc: "", schemas: { AddExperienceFormSchema } },
-  "profile.updateExperience": { fn: m34.updateExperience as any, signature: "data: z.infer<typeof AddExperienceFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddExperienceFormSchema>","optional":false}], doc: "", schemas: { AddExperienceFormSchema } },
-  "profile.deleteFile": { fn: m35.deleteFile as any, signature: "fileId: string", params: [{"name":"fileId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.getResumeList": { fn: m36.getResumeList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, minSections: number = 0,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"minSections","type":"number","optional":true}], doc: "", schemas: {  } },
-  "profile.getResumeById": { fn: m36.getResumeById as any, signature: "resumeId: string,", params: [{"name":"resumeId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.saveResumeReviewResult": { fn: m36.saveResumeReviewResult as any, signature: "resumeId: string, reviewData: string,", params: [{"name":"resumeId","type":"string","optional":false},{"name":"reviewData","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.createResumeProfile": { fn: m36.createResumeProfile as any, signature: "title: string,", params: [{"name":"title","type":"string","optional":false}], doc: "No file here: a create with a file goes through the upload route only", schemas: {  } },
-  "profile.editResume": { fn: m36.editResume as any, signature: "id: string, title: string,", params: [{"name":"id","type":"string","optional":false},{"name":"title","type":"string","optional":false}], doc: "Title only: the file is replaced through the upload route, never from here", schemas: {  } },
-  "profile.deleteResumeById": { fn: m36.deleteResumeById as any, signature: "resumeId: string,", params: [{"name":"resumeId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.getResumeCopyTitleSuggestion": { fn: m37.getResumeCopyTitleSuggestion as any, signature: "resumeId: string,", params: [{"name":"resumeId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.copyResume": { fn: m37.copyResume as any, signature: "resumeId: string, title: string,", params: [{"name":"resumeId","type":"string","optional":false},{"name":"title","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.addSkillsSection": { fn: m38.addSkillsSection as any, signature: "data: z.infer<typeof AddSkillsFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddSkillsFormSchema>","optional":false}], doc: "", schemas: { AddSkillsFormSchema } },
-  "profile.updateSkillsSection": { fn: m38.updateSkillsSection as any, signature: "data: z.infer<typeof UpdateSkillsFormSchema>,", params: [{"name":"data","type":"z.infer<typeof UpdateSkillsFormSchema>","optional":false}], doc: "", schemas: { UpdateSkillsFormSchema } },
-  "profile.deleteSkillsSection": { fn: m38.deleteSkillsSection as any, signature: "sectionId: string,", params: [{"name":"sectionId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "profile.addResumeSummary": { fn: m39.addResumeSummary as any, signature: "data: z.infer<typeof AddSummarySectionFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddSummarySectionFormSchema>","optional":false}], doc: "", schemas: { AddSummarySectionFormSchema } },
-  "profile.updateResumeSummary": { fn: m39.updateResumeSummary as any, signature: "data: z.infer<typeof AddSummarySectionFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddSummarySectionFormSchema>","optional":false}], doc: "", schemas: { AddSummarySectionFormSchema } },
-  "question.getQuestionsList": { fn: m40.getQuestionsList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, filter?: string, search?: string", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"filter","type":"string","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
-  "question.getQuestionById": { fn: m40.getQuestionById as any, signature: "questionId: string", params: [{"name":"questionId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "question.createQuestion": { fn: m40.createQuestion as any, signature: "data: z.infer<typeof AddQuestionFormSchema>", params: [{"name":"data","type":"z.infer<typeof AddQuestionFormSchema>","optional":false}], doc: "", schemas: { AddQuestionFormSchema } },
-  "question.updateQuestion": { fn: m40.updateQuestion as any, signature: "data: z.infer<typeof AddQuestionFormSchema>", params: [{"name":"data","type":"z.infer<typeof AddQuestionFormSchema>","optional":false}], doc: "", schemas: { AddQuestionFormSchema } },
-  "question.deleteQuestion": { fn: m40.deleteQuestion as any, signature: "questionId: string", params: [{"name":"questionId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "question.getTagsWithQuestionCounts": { fn: m40.getTagsWithQuestionCounts as any, signature: "", params: [], doc: "", schemas: {  } },
-  "resumeImport.resolveImportCard": { fn: m41.resolveImportCard as any, signature: "resumeId: string, card: ImportCardPayload,", params: [{"name":"resumeId","type":"string","optional":false},{"name":"card","type":"ImportCardPayload","optional":false}], doc: "", schemas: {  } },
-  "tag.getAllTags": { fn: m42.getAllTags as any, signature: "", params: [], doc: "", schemas: {  } },
-  "tag.getTagList": { fn: m42.getTagList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, search?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
-  "tag.createTag": { fn: m42.createTag as any, signature: "label: string", params: [{"name":"label","type":"string","optional":false}], doc: "", schemas: {  } },
-  "tag.deleteTagById": { fn: m42.deleteTagById as any, signature: "tagId: string,", params: [{"name":"tagId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "task.startActivityFromTask": { fn: m43.startActivityFromTask as any, signature: "taskId: string", params: [{"name":"taskId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "task.createTask": { fn: m44.createTask as any, signature: "data: z.infer<typeof AddTaskFormSchema>", params: [{"name":"data","type":"z.infer<typeof AddTaskFormSchema>","optional":false}], doc: "", schemas: { AddTaskFormSchema } },
-  "task.updateTask": { fn: m44.updateTask as any, signature: "data: z.infer<typeof AddTaskFormSchema>", params: [{"name":"data","type":"z.infer<typeof AddTaskFormSchema>","optional":false}], doc: "", schemas: { AddTaskFormSchema } },
-  "task.updateTaskStatus": { fn: m44.updateTaskStatus as any, signature: "taskId: string, status: TaskStatus", params: [{"name":"taskId","type":"string","optional":false},{"name":"status","type":"TaskStatus","optional":false}], doc: "", schemas: {  } },
-  "task.deleteTaskById": { fn: m44.deleteTaskById as any, signature: "taskId: string", params: [{"name":"taskId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "task.getTasksList": { fn: m45.getTasksList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, filter?: string, statusFilter?: TaskStatus[], search?: string, groupBy?: TaskGroupBy", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"filter","type":"string","optional":true},{"name":"statusFilter","type":"TaskStatus[]","optional":true},{"name":"search","type":"string","optional":true},{"name":"groupBy","type":"TaskGroupBy","optional":true}], doc: "", schemas: {  } },
-  "task.getTaskById": { fn: m45.getTaskById as any, signature: "taskId: string", params: [{"name":"taskId","type":"string","optional":false}], doc: "", schemas: {  } },
-  "task.getActivityTypesWithTaskCounts": { fn: m45.getActivityTypesWithTaskCounts as any, signature: "", params: [], doc: "", schemas: {  } },
-  "userSettings.getUserSettings": { fn: m46.getUserSettings as any, signature: "", params: [], doc: "", schemas: {  } },
-  "userSettings.updateUserSettings": { fn: m46.updateUserSettings as any, signature: "settings: Partial<UserSettingsData>", params: [{"name":"settings","type":"Partial<UserSettingsData>","optional":false}], doc: "", schemas: {  } },
-  "userSettings.updateAiSettings": { fn: m46.updateAiSettings as any, signature: "aiSettings: AiSettings", params: [{"name":"aiSettings","type":"AiSettings","optional":false}], doc: "", schemas: {  } },
-  "userSettings.updateDisplaySettings": { fn: m46.updateDisplaySettings as any, signature: "displaySettings: DisplaySettings", params: [{"name":"displaySettings","type":"DisplaySettings","optional":false}], doc: "", schemas: {  } },
+  "feedback.addJobFeedback": { fn: m20.addJobFeedback as any, signature: "jobId: string, kind: string, liked?: string[], disliked?: string[], how?: string, note?: string,", params: [{"name":"jobId","type":"string","optional":false},{"name":"kind","type":"string","optional":false},{"name":"liked","type":"string[]","optional":true},{"name":"disliked","type":"string[]","optional":true},{"name":"how","type":"string","optional":true},{"name":"note","type":"string","optional":true}], doc: "Record why a job was applied to, passed over or rejected. `kind` is \"applied\", \"passed\" or \"rejected\"; `liked` and `disliked` are arrays of short labels, `note` is free text.", schemas: {  } },
+  "feedback.getJobFeedback": { fn: m20.getJobFeedback as any, signature: "jobId: string", params: [{"name":"jobId","type":"string","optional":false}], doc: "Everything recorded about one job, newest first.", schemas: {  } },
+  "feedback.deleteJobFeedback": { fn: m20.deleteJobFeedback as any, signature: "id: string", params: [{"name":"id","type":"string","optional":false}], doc: "", schemas: {  } },
+  "feedback.getTasteSummary": { fn: m20.getTasteSummary as any, signature: "", params: [], doc: "What the user's own decisions say about their taste: the chips they picked most often, and the technologies that pull toward applying or toward passing. `measured` is false until there are enough decisions to mean anything.", schemas: {  } },
+  "fit.getFitProfile": { fn: m21.getFitProfile as any, signature: "", params: [], doc: "The stored profile, with defaults filled in for anything unset.", schemas: {  } },
+  "fit.saveFitProfile": { fn: m21.saveFitProfile as any, signature: "profileJson: string", params: [{"name":"profileJson","type":"string","optional":false}], doc: "Replace the profile with `profileJson`, or reset to the default when it is empty. Every stored analysis goes stale on a change, so they are rebuilt right here rather than left to drift.", schemas: {  } },
+  "fit.recalculateFits": { fn: m21.recalculateFits as any, signature: "", params: [], doc: "Re-analyze every job whose stored analysis is out of date.", schemas: {  } },
+  "job.addJob": { fn: m22.addJob as any, signature: "data: z.infer<typeof AddJobFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddJobFormSchema>","optional":false}], doc: "", schemas: { AddJobFormSchema } },
+  "job.updateJob": { fn: m22.updateJob as any, signature: "data: z.infer<typeof AddJobFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddJobFormSchema>","optional":false}], doc: "", schemas: { AddJobFormSchema } },
+  "job.deleteJobById": { fn: m22.deleteJobById as any, signature: "jobId: string,", params: [{"name":"jobId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "job.getJobsList": { fn: m23.getJobsList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, filter?: string, search?: string, companyValue?: string, appliedOnly?: boolean, titleValue?: string, locationValue?: string, sourceValue?: string, sort?: JobSort[],", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"filter","type":"string","optional":true},{"name":"search","type":"string","optional":true},{"name":"companyValue","type":"string","optional":true},{"name":"appliedOnly","type":"boolean","optional":true},{"name":"titleValue","type":"string","optional":true},{"name":"locationValue","type":"string","optional":true},{"name":"sourceValue","type":"string","optional":true},{"name":"sort","type":"JobSort[]","optional":true}], doc: "", schemas: {  } },
+  "job.getJobDetails": { fn: m23.getJobDetails as any, signature: "jobId: string,", params: [{"name":"jobId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "job.getStatusList": { fn: m24.getStatusList as any, signature: "", params: [], doc: "JobStatus is global reference data with no createdBy column, so unlike every other list here it is not scoped to the current user.", schemas: {  } },
+  "job.getJobSourceList": { fn: m24.getJobSourceList as any, signature: "", params: [], doc: "", schemas: {  } },
+  "job.createLocation": { fn: m24.createLocation as any, signature: "label: string,", params: [{"name":"label","type":"string","optional":false}], doc: "", schemas: {  } },
+  "job.createJobSource": { fn: m24.createJobSource as any, signature: "label: string,", params: [{"name":"label","type":"string","optional":false}], doc: "", schemas: {  } },
+  "job.updateJobStatus": { fn: m25.updateJobStatus as any, signature: "jobId: string, status: JobStatus,", params: [{"name":"jobId","type":"string","optional":false},{"name":"status","type":"JobStatus","optional":false}], doc: "", schemas: {  } },
+  "job.saveJobMatchResult": { fn: m25.saveJobMatchResult as any, signature: "jobId: string, matchScore: number, matchData: string,", params: [{"name":"jobId","type":"string","optional":false},{"name":"matchScore","type":"number","optional":false},{"name":"matchData","type":"string","optional":false}], doc: "", schemas: {  } },
+  "jobLocation.getAllJobLocations": { fn: m26.getAllJobLocations as any, signature: "", params: [], doc: "", schemas: {  } },
+  "jobLocation.getJobLocationsList": { fn: m26.getJobLocationsList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, countBy?: string, search?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"countBy","type":"string","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
+  "jobLocation.deleteJobLocationById": { fn: m26.deleteJobLocationById as any, signature: "locationId: string", params: [{"name":"locationId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "jobSource.getJobSourceList": { fn: m27.getJobSourceList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, countBy?: string, search?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"countBy","type":"string","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
+  "jobSource.deleteJobSourceById": { fn: m27.deleteJobSourceById as any, signature: "jobSourceId: string", params: [{"name":"jobSourceId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "jobtitle.getAllJobTitles": { fn: m28.getAllJobTitles as any, signature: "", params: [], doc: "", schemas: {  } },
+  "jobtitle.getJobTitleList": { fn: m28.getJobTitleList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, countBy?: string, search?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"countBy","type":"string","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
+  "jobtitle.createJobTitle": { fn: m28.createJobTitle as any, signature: "label: string", params: [{"name":"label","type":"string","optional":false}], doc: "", schemas: {  } },
+  "jobtitle.deleteJobTitleById": { fn: m28.deleteJobTitleById as any, signature: "jobTitleId: string", params: [{"name":"jobTitleId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "mcpToken.listMcpTokens": { fn: m29.listMcpTokens as any, signature: "", params: [], doc: "", schemas: {  } },
+  "mcpToken.revokeMcpToken": { fn: m29.revokeMcpToken as any, signature: "id: string", params: [{"name":"id","type":"string","optional":false}], doc: "", schemas: {  } },
+  "note.getNotesByJobId": { fn: m30.getNotesByJobId as any, signature: "jobId: string", params: [{"name":"jobId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "note.addNote": { fn: m30.addNote as any, signature: "data: z.infer<typeof NoteFormSchema>", params: [{"name":"data","type":"z.infer<typeof NoteFormSchema>","optional":false}], doc: "", schemas: { NoteFormSchema } },
+  "note.updateNote": { fn: m30.updateNote as any, signature: "data: z.infer<typeof NoteFormSchema>", params: [{"name":"data","type":"z.infer<typeof NoteFormSchema>","optional":false}], doc: "", schemas: { NoteFormSchema } },
+  "note.deleteNote": { fn: m30.deleteNote as any, signature: "noteId: string", params: [{"name":"noteId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.addCertification": { fn: m31.addCertification as any, signature: "data: z.infer<typeof AddCertificationFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddCertificationFormSchema>","optional":false}], doc: "", schemas: { AddCertificationFormSchema } },
+  "profile.updateCertification": { fn: m31.updateCertification as any, signature: "data: z.infer<typeof AddCertificationFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddCertificationFormSchema>","optional":false}], doc: "", schemas: { AddCertificationFormSchema } },
+  "profile.addContactInfo": { fn: m32.addContactInfo as any, signature: "data: z.infer<typeof AddContactInfoFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddContactInfoFormSchema>","optional":false}], doc: "", schemas: { AddContactInfoFormSchema } },
+  "profile.updateContactInfo": { fn: m32.updateContactInfo as any, signature: "data: z.infer<typeof AddContactInfoFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddContactInfoFormSchema>","optional":false}], doc: "", schemas: { AddContactInfoFormSchema } },
+  "profile.getDefaultContactInfo": { fn: m32.getDefaultContactInfo as any, signature: "", params: [], doc: "Returns a bare value rather than a result envelope, matching the shape of getDefaultResumeId next door. Null means \"no letterhead\" — the letter then degrades to date + body. getCurrentUser, not this module's usual requireUser: \"no session\" has to return null like every other no-letterhead case, not ", schemas: {  } },
+  "profile.getDefaultResumeId": { fn: m33.getDefaultResumeId as any, signature: "", params: [], doc: "", schemas: {  } },
+  "profile.setDefaultResume": { fn: m33.setDefaultResume as any, signature: "resumeId: string,", params: [{"name":"resumeId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.addEducation": { fn: m34.addEducation as any, signature: "data: z.infer<typeof AddEducationFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddEducationFormSchema>","optional":false}], doc: "", schemas: { AddEducationFormSchema } },
+  "profile.updateEducation": { fn: m34.updateEducation as any, signature: "data: z.infer<typeof AddEducationFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddEducationFormSchema>","optional":false}], doc: "", schemas: { AddEducationFormSchema } },
+  "profile.addExperience": { fn: m35.addExperience as any, signature: "data: z.infer<typeof AddExperienceFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddExperienceFormSchema>","optional":false}], doc: "", schemas: { AddExperienceFormSchema } },
+  "profile.updateExperience": { fn: m35.updateExperience as any, signature: "data: z.infer<typeof AddExperienceFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddExperienceFormSchema>","optional":false}], doc: "", schemas: { AddExperienceFormSchema } },
+  "profile.deleteFile": { fn: m36.deleteFile as any, signature: "fileId: string", params: [{"name":"fileId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.getResumeList": { fn: m37.getResumeList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, minSections: number = 0,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"minSections","type":"number","optional":true}], doc: "", schemas: {  } },
+  "profile.getResumeById": { fn: m37.getResumeById as any, signature: "resumeId: string,", params: [{"name":"resumeId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.saveResumeReviewResult": { fn: m37.saveResumeReviewResult as any, signature: "resumeId: string, reviewData: string,", params: [{"name":"resumeId","type":"string","optional":false},{"name":"reviewData","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.createResumeProfile": { fn: m37.createResumeProfile as any, signature: "title: string,", params: [{"name":"title","type":"string","optional":false}], doc: "No file here: a create with a file goes through the upload route only", schemas: {  } },
+  "profile.editResume": { fn: m37.editResume as any, signature: "id: string, title: string,", params: [{"name":"id","type":"string","optional":false},{"name":"title","type":"string","optional":false}], doc: "Title only: the file is replaced through the upload route, never from here", schemas: {  } },
+  "profile.deleteResumeById": { fn: m37.deleteResumeById as any, signature: "resumeId: string,", params: [{"name":"resumeId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.getResumeCopyTitleSuggestion": { fn: m38.getResumeCopyTitleSuggestion as any, signature: "resumeId: string,", params: [{"name":"resumeId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.copyResume": { fn: m38.copyResume as any, signature: "resumeId: string, title: string,", params: [{"name":"resumeId","type":"string","optional":false},{"name":"title","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.addSkillsSection": { fn: m39.addSkillsSection as any, signature: "data: z.infer<typeof AddSkillsFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddSkillsFormSchema>","optional":false}], doc: "", schemas: { AddSkillsFormSchema } },
+  "profile.updateSkillsSection": { fn: m39.updateSkillsSection as any, signature: "data: z.infer<typeof UpdateSkillsFormSchema>,", params: [{"name":"data","type":"z.infer<typeof UpdateSkillsFormSchema>","optional":false}], doc: "", schemas: { UpdateSkillsFormSchema } },
+  "profile.deleteSkillsSection": { fn: m39.deleteSkillsSection as any, signature: "sectionId: string,", params: [{"name":"sectionId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "profile.addResumeSummary": { fn: m40.addResumeSummary as any, signature: "data: z.infer<typeof AddSummarySectionFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddSummarySectionFormSchema>","optional":false}], doc: "", schemas: { AddSummarySectionFormSchema } },
+  "profile.updateResumeSummary": { fn: m40.updateResumeSummary as any, signature: "data: z.infer<typeof AddSummarySectionFormSchema>,", params: [{"name":"data","type":"z.infer<typeof AddSummarySectionFormSchema>","optional":false}], doc: "", schemas: { AddSummarySectionFormSchema } },
+  "question.getQuestionsList": { fn: m41.getQuestionsList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, filter?: string, search?: string", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"filter","type":"string","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
+  "question.getQuestionById": { fn: m41.getQuestionById as any, signature: "questionId: string", params: [{"name":"questionId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "question.createQuestion": { fn: m41.createQuestion as any, signature: "data: z.infer<typeof AddQuestionFormSchema>", params: [{"name":"data","type":"z.infer<typeof AddQuestionFormSchema>","optional":false}], doc: "", schemas: { AddQuestionFormSchema } },
+  "question.updateQuestion": { fn: m41.updateQuestion as any, signature: "data: z.infer<typeof AddQuestionFormSchema>", params: [{"name":"data","type":"z.infer<typeof AddQuestionFormSchema>","optional":false}], doc: "", schemas: { AddQuestionFormSchema } },
+  "question.deleteQuestion": { fn: m41.deleteQuestion as any, signature: "questionId: string", params: [{"name":"questionId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "question.getTagsWithQuestionCounts": { fn: m41.getTagsWithQuestionCounts as any, signature: "", params: [], doc: "", schemas: {  } },
+  "resumeImport.resolveImportCard": { fn: m42.resolveImportCard as any, signature: "resumeId: string, card: ImportCardPayload,", params: [{"name":"resumeId","type":"string","optional":false},{"name":"card","type":"ImportCardPayload","optional":false}], doc: "", schemas: {  } },
+  "tag.getAllTags": { fn: m43.getAllTags as any, signature: "", params: [], doc: "", schemas: {  } },
+  "tag.getTagList": { fn: m43.getTagList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, search?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"search","type":"string","optional":true}], doc: "", schemas: {  } },
+  "tag.createTag": { fn: m43.createTag as any, signature: "label: string", params: [{"name":"label","type":"string","optional":false}], doc: "", schemas: {  } },
+  "tag.deleteTagById": { fn: m43.deleteTagById as any, signature: "tagId: string,", params: [{"name":"tagId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "task.startActivityFromTask": { fn: m44.startActivityFromTask as any, signature: "taskId: string", params: [{"name":"taskId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "task.createTask": { fn: m45.createTask as any, signature: "data: z.infer<typeof AddTaskFormSchema>", params: [{"name":"data","type":"z.infer<typeof AddTaskFormSchema>","optional":false}], doc: "", schemas: { AddTaskFormSchema } },
+  "task.updateTask": { fn: m45.updateTask as any, signature: "data: z.infer<typeof AddTaskFormSchema>", params: [{"name":"data","type":"z.infer<typeof AddTaskFormSchema>","optional":false}], doc: "", schemas: { AddTaskFormSchema } },
+  "task.updateTaskStatus": { fn: m45.updateTaskStatus as any, signature: "taskId: string, status: TaskStatus", params: [{"name":"taskId","type":"string","optional":false},{"name":"status","type":"TaskStatus","optional":false}], doc: "", schemas: {  } },
+  "task.deleteTaskById": { fn: m45.deleteTaskById as any, signature: "taskId: string", params: [{"name":"taskId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "task.getTasksList": { fn: m46.getTasksList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, filter?: string, statusFilter?: TaskStatus[], search?: string, groupBy?: TaskGroupBy", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"filter","type":"string","optional":true},{"name":"statusFilter","type":"TaskStatus[]","optional":true},{"name":"search","type":"string","optional":true},{"name":"groupBy","type":"TaskGroupBy","optional":true}], doc: "", schemas: {  } },
+  "task.getTaskById": { fn: m46.getTaskById as any, signature: "taskId: string", params: [{"name":"taskId","type":"string","optional":false}], doc: "", schemas: {  } },
+  "task.getActivityTypesWithTaskCounts": { fn: m46.getActivityTypesWithTaskCounts as any, signature: "", params: [], doc: "", schemas: {  } },
+  "userSettings.getUserSettings": { fn: m47.getUserSettings as any, signature: "", params: [], doc: "", schemas: {  } },
+  "userSettings.updateUserSettings": { fn: m47.updateUserSettings as any, signature: "settings: Partial<UserSettingsData>", params: [{"name":"settings","type":"Partial<UserSettingsData>","optional":false}], doc: "", schemas: {  } },
+  "userSettings.updateAiSettings": { fn: m47.updateAiSettings as any, signature: "aiSettings: AiSettings", params: [{"name":"aiSettings","type":"AiSettings","optional":false}], doc: "", schemas: {  } },
+  "userSettings.updateDisplaySettings": { fn: m47.updateDisplaySettings as any, signature: "displaySettings: DisplaySettings", params: [{"name":"displaySettings","type":"DisplaySettings","optional":false}], doc: "", schemas: {  } },
 };

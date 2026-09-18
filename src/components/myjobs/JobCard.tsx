@@ -17,6 +17,7 @@ type JobCardProps = {
   editJob: (id: string) => void;
   onChangeJobStatus: (id: string, status: JobStatus) => void;
   onAddNote: (jobId: string) => void;
+  onFeedback?: (job: JobResponse, kind: "applied" | "passed") => void;
   onDeleteJob: (jobId: string) => void;
 };
 
@@ -26,6 +27,7 @@ export function JobCard({
   editJob,
   onChangeJobStatus,
   onAddNote,
+  onFeedback,
   onDeleteJob,
 }: JobCardProps) {
   const notesCount = job._count?.Notes ?? 0;
@@ -95,6 +97,7 @@ export function JobCard({
           editJob={editJob}
           onChangeJobStatus={onChangeJobStatus}
           onAddNote={onAddNote}
+          onFeedback={onFeedback}
           onDeleteJob={onDeleteJob}
         />
       </div>
