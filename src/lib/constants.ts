@@ -42,6 +42,7 @@ export const APP_CONSTANTS = {
   LAST_JOB_LOCATION_STORAGE_KEY: "last-job-location",
   LAST_JOB_SOURCE_STORAGE_KEY: "last-job-source",
   JOBS_VIEW_MODE_STORAGE_KEY: "jobs-view-mode",
+  JOBS_SORT_STORAGE_KEY: "jobs-sort",
   RESUME_PREVIEW_FIT_STORAGE_KEY: "resume-preview-fit",
   RESUME_EXPORT_SETTINGS_STORAGE_KEY: "resume-export-settings",
   COVER_LETTER_EXPORT_SETTINGS_STORAGE_KEY: "cover-letter-export-settings",

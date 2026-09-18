@@ -79,6 +79,8 @@ function JobsContainer({
     reloadJobs,
     onFilterChange,
     sentinelRef,
+    sort,
+    toggleSort,
   } = useJobsList({
     companyFilter,
     appliedFilter,
@@ -173,6 +175,8 @@ function JobsContainer({
               />
             ) : (
               <MyJobsTable
+                sort={sort}
+                onToggleSort={toggleSort}
                 jobs={jobs}
                 jobStatuses={statuses}
                 deleteJob={onDeleteJob}

@@ -181,3 +181,15 @@ export function getJobTypeLabel(
 }
 
 export type DescriptionCompleteness = "title-only" | "partial" | "full";
+
+// Columns the jobs table can sort by, in the order the user picked them.
+export type JobSortField =
+  | "appliedDate"
+  | "title"
+  | "company"
+  | "location"
+  | "status"
+  | "matchScore"
+  | "source"
+  | "createdAt";
+export type JobSort = { field: JobSortField; dir: "asc" | "desc" };

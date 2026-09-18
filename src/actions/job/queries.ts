@@ -1,7 +1,7 @@
 "use server";
 import prisma from "@/lib/db";
 import { handleError } from "@/lib/utils";
-import { JOB_TYPES } from "@/models/job.model";
+import { JOB_TYPES, type JobSort } from "@/models/job.model";
 import { APP_CONSTANTS } from "@/lib/constants";
 import { requireUser } from "../shared";
 import { hideUnanalyzedScore } from "./shared";
@@ -170,6 +170,27 @@ const buildJobsWhereClause = (userId: string, filters: JobsListFilters) => {
   return whereClause;
 };
 
+// Multi-column sort: the table sends the columns in the order the user picked
+// them, and Prisma applies an orderBy array in that same order.
+const JOB_SORT_FIELDS = {
+  appliedDate: (dir: "asc" | "desc") => ({ appliedDate: dir }),
+  title: (dir: "asc" | "desc") => ({ JobTitle: { label: dir } }),
+  company: (dir: "asc" | "desc") => ({ Company: { label: dir } }),
+  location: (dir: "asc" | "desc") => ({ Location: { label: dir } }),
+  status: (dir: "asc" | "desc") => ({ Status: { label: dir } }),
+  matchScore: (dir: "asc" | "desc") => ({ matchScore: dir }),
+  source: (dir: "asc" | "desc") => ({ JobSource: { label: dir } }),
+  createdAt: (dir: "asc" | "desc") => ({ createdAt: dir }),
+} as const;
+
+function buildJobsOrderBy(sort?: JobSort[]) {
+  const picked = (sort ?? [])
+    .filter((s) => JOB_SORT_FIELDS[s.field] && (s.dir === "asc" || s.dir === "desc"))
+    .map((s) => JOB_SORT_FIELDS[s.field](s.dir));
+  // createdAt last keeps paging stable when the chosen columns tie.
+  return [...picked, { createdAt: "desc" as const }];
+}
+
 export const getJobsList = async (
   page: number = 1,
   limit: number = APP_CONSTANTS.RECORDS_PER_PAGE,
@@ -180,6 +201,7 @@ export const getJobsList = async (
   titleValue?: string,
   locationValue?: string,
   sourceValue?: string,
+  sort?: JobSort[],
 ): Promise<any | undefined> => {
   try {
     const user = await requireUser();
@@ -201,10 +223,7 @@ export const getJobsList = async (
         skip,
         take: limit,
         select: JOB_LIST_SELECT,
-        orderBy: {
-          createdAt: "desc",
-          // appliedDate: "desc",
-        },
+        orderBy: buildJobsOrderBy(sort),
       }),
       prisma.job.count({
         where: whereClause,

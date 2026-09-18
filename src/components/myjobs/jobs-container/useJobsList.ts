@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getJobsList } from "@/actions/job.actions";
 import { toastError } from "@/lib/toast";
-import { JobResponse, JobsViewMode } from "@/models/job.model";
+import { JobResponse, JobsViewMode, type JobSort, type JobSortField } from "@/models/job.model";
 import { APP_CONSTANTS } from "@/lib/constants";
 import {
   getFromLocalStorage,
@@ -32,6 +32,7 @@ export function useJobsList({
   const [totalJobs, setTotalJobs] = useState(0);
   const [filterKey, setFilterKey] = useState<string>("none");
   const [searchTerm, setSearchTerm] = useState("");
+  const [sort, setSort] = useState<JobSort[]>([]);
   const [initialLoading, setInitialLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const hasSearched = useRef(false);
@@ -45,11 +46,29 @@ export function useJobsList({
       null,
     );
     if (saved === "cards" || saved === "table") setViewMode(saved);
+    const savedSort = getFromLocalStorage(APP_CONSTANTS.JOBS_SORT_STORAGE_KEY, null);
+    if (Array.isArray(savedSort)) setSort(savedSort as JobSort[]);
   }, []);
 
-  const onChangeViewMode = (mode: JobsViewMode) => {
-    setViewMode(mode);
-    saveToLocalStorage(APP_CONSTANTS.JOBS_VIEW_MODE_STORAGE_KEY, mode);
+  // Click a column to sort by it alone; shift-click adds it as a tie-breaker
+  // after the columns already chosen. Cycle per column: desc -> asc -> off.
+  const toggleSort = (field: JobSortField, additive = false) => {
+    setSort((prev) => {
+      const current = prev.find((s) => s.field === field);
+      const nextDir = !current ? "desc" : current.dir === "desc" ? "asc" : null;
+      let next: JobSort[];
+      if (!additive) {
+        next = nextDir ? [{ field, dir: nextDir }] : [];
+      } else if (!current) {
+        next = [...prev, { field, dir: "desc" }];
+      } else if (nextDir) {
+        next = prev.map((s) => (s.field === field ? { field, dir: nextDir } : s));
+      } else {
+        next = prev.filter((s) => s.field !== field);
+      }
+      saveToLocalStorage(APP_CONSTANTS.JOBS_SORT_STORAGE_KEY, next);
+      return next;
+    });
   };
 
   const jobsPerPage = APP_CONSTANTS.RECORDS_PER_PAGE;
@@ -68,6 +87,7 @@ export function useJobsList({
         titleFilter || undefined,
         locationFilter || undefined,
         sourceFilter || undefined,
+        sort,
       );
       if (success && data) {
         setJobs((prev) => (page === 1 ? data : [...prev, ...data]));
@@ -86,6 +106,7 @@ export function useJobsList({
       titleFilter,
       locationFilter,
       sourceFilter,
+      sort,
     ],
   );
 
@@ -175,5 +196,7 @@ export function useJobsList({
     reloadJobs,
     onFilterChange,
     sentinelRef,
+    sort,
+    toggleSort,
   };
 }
