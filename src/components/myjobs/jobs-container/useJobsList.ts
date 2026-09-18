@@ -50,6 +50,11 @@ export function useJobsList({
     if (Array.isArray(savedSort)) setSort(savedSort as JobSort[]);
   }, []);
 
+  const onChangeViewMode = (mode: JobsViewMode) => {
+    setViewMode(mode);
+    saveToLocalStorage(APP_CONSTANTS.JOBS_VIEW_MODE_STORAGE_KEY, mode);
+  };
+
   // Click a column to sort by it alone; shift-click adds it as a tie-breaker
   // after the columns already chosen. Cycle per column: desc -> asc -> off.
   const toggleSort = (field: JobSortField, additive = false) => {
