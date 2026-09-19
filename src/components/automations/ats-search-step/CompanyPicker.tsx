@@ -19,10 +19,10 @@ import {
 } from "@/components/ui/popover";
 import { APP_CONSTANTS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { boardById } from "@/lib/scraper/boards";
 import type { JobBoard, LeverCompany } from "@/models/automation.model";
 import { companyBoardUrl } from "@/lib/atsBoardUrl";
 import { toastInfo } from "@/lib/toast";
-import { PROVIDER_META } from "./types";
 import { useAtsCompanySearch } from "./useAtsCompanySearch";
 import { useWatchedBoards } from "./useWatchedBoards";
 import { JobBoardUrlAdd } from "@/components/JobBoardUrlAdd";
@@ -42,7 +42,8 @@ export function CompanyPicker({
   onAddMany,
   onRemove,
 }: CompanyPickerProps) {
-  const meta = PROVIDER_META[provider] ?? PROVIDER_META.greenhouse;
+  const board = boardById(provider);
+  const label = board?.label ?? provider;
   const {
     query,
     results,
@@ -81,12 +82,17 @@ export function CompanyPicker({
     <div className="space-y-2">
       <Label className="flex items-center justify-between">
         <span>
-          {meta.label} Companies{" "}
+          {label} Companies{" "}
           <span className="font-normal text-muted-foreground">
             ({companies.length}/{APP_CONSTANTS.ATS_MAX_COMPANIES})
           </span>
         </span>
-        {totalCount !== null && totalCount > 0 && (
+        {/* Zero is shown, not hidden. The five boards phase 5 added have a */}
+        {/* directory of a handful of companies and one briefly had none at */}
+        {/* all, and with this line suppressed the picker answered every */}
+        {/* query with a bare "No matches" — which reads as "this board has */}
+        {/* no such company" rather than "there is nothing here to search". */}
+        {totalCount !== null && (
           <span className="text-xs font-normal text-muted-foreground">
             {totalCount} available
           </span>
@@ -106,7 +112,7 @@ export function CompanyPicker({
           >
             {atLimit
               ? `Max ${APP_CONSTANTS.ATS_MAX_COMPANIES} companies reached`
-              : `Search companies (e.g., ${meta.searchExample})`}
+              : `Search companies (e.g., ${board?.wizard.searchExample ?? label})`}
             {isSearching ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -245,12 +251,12 @@ export function CompanyPicker({
 
       <JobBoardUrlAdd
         provider={provider}
-        placeholder={meta.urlHint}
+        placeholder={board?.wizard.urlHint ?? "Or paste a board link or token"}
         disabled={atLimit}
         onResolved={onAdd}
       />
       <p className="text-sm text-muted-foreground">
-        Select {meta.label} companies to monitor their job boards for new
+        Select {label} companies to monitor their job boards for new
         openings.
       </p>
     </div>

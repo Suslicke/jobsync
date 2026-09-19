@@ -2,24 +2,48 @@
 
 import { getCurrentUser } from "@/utils/user.utils";
 import { APP_CONSTANTS } from "@/lib/constants";
-import { ATS_TOKEN_REGEX } from "@/lib/scraper/utils";
+import {
+  ATS_TOKEN_REGEX,
+  ATS_TOKEN_MIXED_REGEX,
+  humanizeToken,
+} from "@/lib/scraper/utils";
+import { boardById } from "@/lib/scraper/boards";
+import { ATS_PROVIDERS } from "@/lib/scraper/ats/registry";
+import type { ResolveResult } from "@/lib/scraper/ats/types";
 import greenhouseSeed from "@/lib/scraper/greenhouse/companies.json";
 import leverSeed from "@/lib/scraper/lever/companies.json";
 import ashbySeed from "@/lib/scraper/ashby/companies.json";
+import ripplingSeed from "@/lib/scraper/rippling/companies.json";
+import workableSeed from "@/lib/scraper/workable/companies.json";
+import smartrecruitersSeed from "@/lib/scraper/smartrecruiters/companies.json";
+import personioSeed from "@/lib/scraper/personio/companies.json";
+import recruiteeSeed from "@/lib/scraper/recruitee/companies.json";
 import type { JobBoard, LeverHost } from "@/models/automation.model";
 
-// `host` is present (optional) on Lever entries only; Greenhouse entries omit it.
+// `host` is present (optional) on Lever entries only; every other board's
+// entries omit it.
 type SeedCompany = { name: string; token: string; host?: LeverHost };
+
+// Greenhouse, Lever and Ashby carry thousands of companies each; the five
+// boards phase 5 added carry a handful, and that is not an oversight waiting to
+// be filled in. There is no public index of Rippling / Workable /
+// SmartRecruiters / Personio / Recruitee boards to harvest, and the old panel
+// had none either — it learned a slug from a link it had already collected and
+// kept exactly two hand-named extras in data/ats_extra.json. The entries here
+// are the boards verified against a live response on 19.09.2026, and the way in
+// for anything else is the board's resolve(), which the wizard's "or paste a
+// <host> link" field calls.
 
 const SEEDS: Record<string, SeedCompany[]> = {
   greenhouse: greenhouseSeed,
   lever: leverSeed as SeedCompany[],
   ashby: ashbySeed as SeedCompany[],
+  rippling: ripplingSeed as SeedCompany[],
+  workable: workableSeed as SeedCompany[],
+  smartrecruiters: smartrecruitersSeed as SeedCompany[],
+  personio: personioSeed as SeedCompany[],
+  recruitee: recruiteeSeed as SeedCompany[],
 };
-
-type ResolveResult =
-  | { success: true; name: string; token: string; host?: LeverHost }
-  | { success: false; message: string };
 
 // Typeahead over the seeded companies.json (server-side filter, paginated).
 // An empty query browses the full list (alphabetical); `offset` drives the
@@ -58,7 +82,12 @@ export async function getAtsCompanyCount(provider: JobBoard): Promise<number> {
 }
 
 // Validate a token or board URL; returns the display company name (and, for
-// Lever, the resolved host). Dispatches per provider.
+// Lever, the resolved host). Dispatches to the board's own resolve().
+//
+// Each board's token parser belongs in that board's own directory, so this
+// action only routes. The fallback is bare-token validation against the board
+// table's tokenCase — enough to add a board by slug, without this file growing
+// an arm per board.
 export async function resolveAtsBoard(
   provider: JobBoard,
   input: string,
@@ -66,10 +95,31 @@ export async function resolveAtsBoard(
   const user = await getCurrentUser();
   if (!user) return { success: false, message: "Not authenticated" };
 
+  const board = boardById(provider);
+  if (!board || board.kind !== "companies") {
+    return { success: false, message: "Unsupported provider" };
+  }
+
   if (provider === "greenhouse") return resolveGreenhouse(input);
   if (provider === "lever") return resolveLever(input);
   if (provider === "ashby") return resolveAshby(input);
-  return { success: false, message: "Unsupported provider" };
+
+  const registered = ATS_PROVIDERS[provider];
+  if (registered?.kind === "companies" && registered.resolve) {
+    return registered.resolve(input);
+  }
+
+  const token = input.trim();
+  const regex =
+    board.tokenCase === "mixed" ? ATS_TOKEN_MIXED_REGEX : ATS_TOKEN_REGEX;
+  if (!regex.test(token)) {
+    return {
+      success: false,
+      message: `Paste a ${board.label} board token`,
+    };
+  }
+  const seeded = (SEEDS[provider] ?? []).find((c) => c.token === token);
+  return { success: true, name: seeded?.name ?? humanizeToken(token), token };
 }
 
 // Greenhouse: extract token from a board URL or bare token; validate via
@@ -152,12 +202,6 @@ function extractLeverToken(
   }
 
   return null;
-}
-
-function humanizeToken(token: string): string {
-  return token
-    .replace(/[-_]+/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 async function probeLeverBoard(

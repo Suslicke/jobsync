@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { companyBoardUrl } from "@/lib/atsBoardUrl";
-import { PROVIDER_META } from "@/components/automations/ats-search-step/types";
+import { boardLabel } from "@/lib/scraper/boards";
 import type { Company } from "@/models/job.model";
 import type { JobBoard, LeverHost } from "@/models/automation.model";
 
@@ -14,7 +14,7 @@ export function BoardCell({ company }: { company: Company }) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="text-muted-foreground">
-        {PROVIDER_META[provider].label} {company.atsToken}
+        {boardLabel(provider)} {company.atsToken}
       </span>
       <a
         href={companyBoardUrl(provider, {

@@ -1,7 +1,7 @@
 import pLimit from "p-limit";
 import { APP_CONSTANTS } from "@/lib/constants";
 import type { JobDetails, ScraperResult } from "../types";
-import { errorReason } from "../utils";
+import { errorReason, runDeadline } from "../utils";
 import type { AshbyBoardResponse } from "./types";
 import { mapAshbyJob } from "./mapper";
 
@@ -10,16 +10,13 @@ import { mapAshbyJob } from "./mapper";
 export async function fetchAshbyBoardJobs(
   name: string,
   token: string,
+  signal?: AbortSignal,
 ): Promise<ScraperResult<JobDetails[]>> {
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    APP_CONSTANTS.ASHBY_FETCH_TIMEOUT_MS,
-  );
+  const deadline = runDeadline(APP_CONSTANTS.ASHBY_FETCH_TIMEOUT_MS, signal);
 
   try {
     const url = `${APP_CONSTANTS.ASHBY_BASE_URL}/${encodeURIComponent(token)}`;
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, { signal: deadline.signal });
 
     // 429 is distinct so the run surfaces the existing "rate limited" label.
     if (response.status === 429) {
@@ -59,7 +56,7 @@ export async function fetchAshbyBoardJobs(
     const message = error instanceof Error ? error.message : "Unknown error";
     return { success: false, error: { type: "network", message } };
   } finally {
-    clearTimeout(timer);
+    deadline.release();
   }
 }
 
@@ -67,12 +64,13 @@ export async function fetchAshbyBoardJobs(
 // Mirrors searchGreenhouseJobs / searchLeverJobs.
 export async function searchAshbyJobs(
   companies: { name: string; token: string }[],
+  signal?: AbortSignal,
 ): Promise<{ jobs: JobDetails[]; errors: { token: string; reason: string }[] }> {
   const limit = pLimit(APP_CONSTANTS.ASHBY_FETCH_CONCURRENCY);
 
   const settled = await Promise.allSettled(
     companies.map(({ name, token }) =>
-      limit(() => fetchAshbyBoardJobs(name, token)),
+      limit(() => fetchAshbyBoardJobs(name, token, signal)),
     ),
   );
 

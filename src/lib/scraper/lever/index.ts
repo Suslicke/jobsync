@@ -1,7 +1,7 @@
 import pLimit from "p-limit";
 import { APP_CONSTANTS } from "@/lib/constants";
 import type { JobDetails, ScraperResult } from "../types";
-import { errorReason } from "../utils";
+import { delay, errorReason, runDeadline } from "../utils";
 import type { LeverHost, LeverPosting } from "./types";
 import { mapLeverJob } from "./mapper";
 
@@ -18,12 +18,10 @@ export async function fetchLeverBoardJobs(
   name: string,
   token: string,
   host?: LeverHost,
+  signal?: AbortSignal,
 ): Promise<ScraperResult<JobDetails[]>> {
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    APP_CONSTANTS.LEVER_FETCH_TIMEOUT_MS, // one deadline for the whole loop
-  );
+  // One deadline for the whole loop, plus the run's own cancel.
+  const deadline = runDeadline(APP_CONSTANTS.LEVER_FETCH_TIMEOUT_MS, signal);
 
   try {
     const all: JobDetails[] = [];
@@ -34,7 +32,7 @@ export async function fetchLeverBoardJobs(
         `${leverBaseUrl(host)}/${encodeURIComponent(token)}` +
         `?mode=json&skip=${skip}&limit=${APP_CONSTANTS.LEVER_PAGE_LIMIT}`;
 
-      const res = await fetch(url, { signal: controller.signal });
+      const res = await fetch(url, { signal: deadline.signal });
 
       // 429 is distinct from a generic failure so the run surfaces the
       // existing "rate_limited" label instead of a bare network error.
@@ -75,9 +73,7 @@ export async function fetchLeverBoardJobs(
 
       // Politeness delay between sequential pages of the same board (bounded by
       // LEVER_FETCH_TIMEOUT_MS via the abort controller).
-      await new Promise((r) =>
-        setTimeout(r, APP_CONSTANTS.LEVER_PAGE_DELAY_MS),
-      );
+      await delay(APP_CONSTANTS.LEVER_PAGE_DELAY_MS, signal);
     }
     return { success: true, data: all };
   } catch (error) {
@@ -90,7 +86,7 @@ export async function fetchLeverBoardJobs(
     const message = error instanceof Error ? error.message : "Unknown error";
     return { success: false, error: { type: "network", message } };
   } finally {
-    clearTimeout(timer);
+    deadline.release();
   }
 }
 
@@ -98,12 +94,13 @@ export async function fetchLeverBoardJobs(
 // Mirrors searchGreenhouseJobs; only the fetch fn + concurrency differ.
 export async function searchLeverJobs(
   companies: { name: string; token: string; host?: LeverHost }[],
+  signal?: AbortSignal,
 ): Promise<{ jobs: JobDetails[]; errors: { token: string; reason: string }[] }> {
   const limit = pLimit(APP_CONSTANTS.LEVER_FETCH_CONCURRENCY);
 
   const settled = await Promise.allSettled(
     companies.map(({ name, token, host }) =>
-      limit(() => fetchLeverBoardJobs(name, token, host)),
+      limit(() => fetchLeverBoardJobs(name, token, host, signal)),
     ),
   );
 

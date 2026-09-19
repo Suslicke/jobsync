@@ -70,7 +70,10 @@ describe("getExistingJobDedupeMap", () => {
       row({ id: "second", jobUrl: "https://www.ex.com/jobs/1/?utm_source=x" }),
     ]);
     const map = await getExistingJobDedupeMap("user-1");
-    expect(map.size).toBe(1);
+    // Each job registers a URL key and a role key, so the map holds more
+    // entries than jobs; what matters is that every key points at the first
+    // writer.
+    expect([...new Set([...map.values()].map((v) => v.id))]).toEqual(["first"]);
     expect(map.get(jobDedupeKey({ url: "https://ex.com/jobs/1" }))?.id).toBe("first");
   });
 

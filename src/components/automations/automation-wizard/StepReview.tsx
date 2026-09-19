@@ -2,7 +2,9 @@
 
 import { APP_CONSTANTS } from "@/lib/constants";
 import type { CreateAutomationInput } from "@/models/automation.schema";
-import type { AtsConfigValue } from "../AtsSearchStep";
+import { boardLabel } from "@/lib/scraper/boards";
+import { describeSourceTargets } from "../search-step/summary";
+import type { AnySourceConfig } from "@/models/automation.model";
 import type { WizardResume } from "./wizardConfig";
 
 export function StepReview({
@@ -11,9 +13,10 @@ export function StepReview({
   selectedResume,
 }: {
   formValues: CreateAutomationInput;
-  atsConfig: AtsConfigValue;
+  atsConfig: AnySourceConfig;
   selectedResume?: WizardResume;
 }) {
+  const targets = describeSourceTargets(formValues.jobBoard, atsConfig);
   return (
     <div className="rounded-lg border p-4 space-y-3">
       <div className="flex justify-between">
@@ -22,17 +25,13 @@ export function StepReview({
       </div>
       <div className="flex justify-between">
         <span className="text-muted-foreground">Job Board</span>
-        <span className="font-medium capitalize">
-          {formValues.jobBoard || "-"}
+        <span className="font-medium">
+          {formValues.jobBoard ? boardLabel(formValues.jobBoard) : "-"}
         </span>
       </div>
       <div className="flex justify-between gap-4">
-        <span className="text-muted-foreground">Companies</span>
-        <span className="font-medium text-right">
-          {atsConfig.companies?.length
-            ? atsConfig.companies.map((c) => c.name).join(", ")
-            : "-"}
-        </span>
+        <span className="text-muted-foreground">{targets.label}</span>
+        <span className="font-medium text-right">{targets.value}</span>
       </div>
       <div className="flex justify-between gap-4">
         <span className="text-muted-foreground">Target titles</span>

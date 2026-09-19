@@ -26,6 +26,10 @@ export interface PipelineResult {
     located: number | null; // survivors after strict location gate (null if off)
     floorSurvivors: number; // jobs clearing the floor, before the cap ceiling
     scoreCut: number; // floor survivors dropped by the minimum-score gate
+    // True when the minimum-score gate was bypassed entirely. scoreCut cannot
+    // carry this: on the fail-open path it is 0, which reads as "nothing was
+    // cut" rather than "the gate did no work".
+    scoreFloorFailedOpen: boolean;
     relevant: number; // survivors after the score gate and cap (the LLM budget)
   };
 }
@@ -77,9 +81,17 @@ export function runAtsPipeline(
   // is corpus-relative, so a board where every job shares the user's terms
   // scores everything near zero, and dropping that whole run would be worse
   // than analyzing it.
+  //
+  // On a query or feed board that is not the exception but every run: every
+  // fetched job matched the keywords by construction, so every term's df ~ n
+  // and every idf ~ 0. The fail-open is reported rather than left to be
+  // discovered in production — the real ranking there is the fitData and
+  // reachScore computed at persist time; the prerank is only an LLM budget
+  // allocator.
   const strong = floorSurvivors.filter(
     (s) => s.score >= APP_CONSTANTS.ATS_MIN_PRERANK_SCORE,
   );
+  const failedOpen = strong.length === 0 && floorSurvivors.length > 0;
   const ranked = strong.length > 0 ? strong : floorSurvivors;
 
   const capped = ranked.slice(0, cap);
@@ -92,6 +104,7 @@ export function runAtsPipeline(
       located: located ? located.length : null,
       floorSurvivors: floorSurvivors.length,
       scoreCut: floorSurvivors.length - ranked.length,
+      scoreFloorFailedOpen: failedOpen,
       relevant: capped.length,
     },
   };

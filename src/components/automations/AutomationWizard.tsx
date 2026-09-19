@@ -13,7 +13,7 @@ import { Form } from "@/components/ui/form";
 import type { CreateAutomationInput } from "@/models/automation.schema";
 import { toastError } from "@/lib/toast";
 import type { AutomationWithResume } from "@/models/automation.model";
-import { AtsSearchStep } from "./AtsSearchStep";
+import { SearchStep } from "./SearchStep";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { STEPS, type WizardResume } from "./automation-wizard/wizardConfig";
 import { useWizardForm } from "./automation-wizard/useWizardForm";
@@ -103,8 +103,8 @@ export function AutomationWizard({
               </div>
 
               <div className={step === 1 ? "space-y-4" : "hidden"}>
-                <AtsSearchStep
-                  provider={formValues.jobBoard}
+                <SearchStep
+                  board={formValues.jobBoard}
                   value={atsConfig}
                   onChange={(next) =>
                     form.setValue(

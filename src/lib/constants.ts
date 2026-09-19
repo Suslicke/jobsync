@@ -15,7 +15,13 @@ export const APP_CONSTANTS = {
   // Page size for the ATS board directory (browse + typeahead). Kept here so
   // the pager and searchAtsCompanies can never disagree.
   ATS_COMPANY_PAGE_SIZE: 50,
-  MAX_AUTOMATIONS_PER_USER: 10,
+  // Sixteen boards do not fit in ten automations, and one board per automation
+  // is the shape the config forces. The per-hour cap replaces the old
+  // one-automation-per-hour rule: runDueAutomations is a sequential awaited
+  // loop, so automations sharing an hour already run one after another — the
+  // uniqueness rule was never what kept them from piling up.
+  MAX_AUTOMATIONS_PER_USER: 24,
+  AUTOMATIONS_PER_HOUR_MAX: 4,
   MAX_JOB_TAGS: 10,
   MIN_QUESTION_LENGTH: 5,
   MAX_QUESTION_LENGTH: 500,
@@ -135,6 +141,121 @@ export const APP_CONSTANTS = {
   ASHBY_JOB_URL: "https://jobs.ashbyhq.com", // public board page (not API)
   ASHBY_FETCH_TIMEOUT_MS: 25_000, // per-board AbortController timeout
   ASHBY_FETCH_CONCURRENCY: 5,
+
+  // Rippling (public company board API — list has no description, so the
+  // adapter hydrates the survivors from /board/<slug>/jobs/<uuid>)
+  RIPPLING_BASE_URL: "https://api.rippling.com/platform/api/ats/v1/board",
+  RIPPLING_BOARD_URL: "https://ats.rippling.com", // public board page (not API)
+  RIPPLING_FETCH_TIMEOUT_MS: 25_000,
+  RIPPLING_FETCH_CONCURRENCY: 5,
+
+  // Workable (v3 list is TEN rows a page and must be paged by nextPage, or
+  // every company with more than ten roles is silently cut to its first ten;
+  // the detail that carries the description is v2, not v3)
+  WORKABLE_BASE_URL: "https://apply.workable.com/api/v3/accounts",
+  WORKABLE_DETAIL_BASE_URL: "https://apply.workable.com/api/v2/accounts",
+  WORKABLE_BOARD_URL: "https://apply.workable.com", // public board page (not API)
+  WORKABLE_PAGE_LIMIT: 10, // not tunable: the API's fixed page size
+  WORKABLE_MAX_PAGES: 20,
+  WORKABLE_PAGE_DELAY_MS: 150,
+  WORKABLE_FETCH_TIMEOUT_MS: 25_000,
+  WORKABLE_FETCH_CONCURRENCY: 5,
+
+  // SmartRecruiters (offset pagination with a totalFound the adapter reports
+  // as coverage; slugs are case sensitive — see the board table's tokenCase)
+  SMARTRECRUITERS_BASE_URL: "https://api.smartrecruiters.com/v1/companies",
+  SMARTRECRUITERS_BOARD_URL: "https://jobs.smartrecruiters.com", // public page
+  SMARTRECRUITERS_PAGE_LIMIT: 100,
+  SMARTRECRUITERS_MAX_PAGES: 10,
+  SMARTRECRUITERS_PAGE_DELAY_MS: 150,
+  SMARTRECRUITERS_FETCH_TIMEOUT_MS: 25_000,
+  SMARTRECRUITERS_FETCH_CONCURRENCY: 5,
+
+  // Personio (whole board as one XML document; .de first, .com as fallback)
+  PERSONIO_BOARD_SUFFIX: ".jobs.personio.de",
+  PERSONIO_BOARD_SUFFIX_COM: ".jobs.personio.com",
+  PERSONIO_FETCH_TIMEOUT_MS: 25_000,
+  PERSONIO_FETCH_CONCURRENCY: 5,
+
+  // Recruitee (whole board in one call, description already in the list)
+  RECRUITEE_BOARD_SUFFIX: ".recruitee.com",
+  RECRUITEE_FETCH_TIMEOUT_MS: 25_000,
+  RECRUITEE_FETCH_CONCURRENCY: 5,
+
+  // LinkedIn guest search. Unauthenticated, so the limit is per IP and it is
+  // on SPEED, not volume: ~1.5 req/s is safe and 5 req/s 429s at request 27.
+  // The sweep and the description pass share that one bucket, so both run at
+  // concurrency 1 behind the same interval floor.
+  LINKEDIN_GUEST_BASE_URL:
+    "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search",
+  LINKEDIN_DESC_BASE_URL:
+    "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting",
+  LINKEDIN_JOB_URL: "https://www.linkedin.com/jobs/view", // public posting page
+  LINKEDIN_GUEST_PAGE_STEP: 10, // the endpoint's step; 25 skips indices 10-24
+  LINKEDIN_GUEST_MAX_PAGES: 40, // start=1000 returns 400
+  LINKEDIN_GUEST_CONCURRENCY: 1,
+  LINKEDIN_GUEST_MIN_INTERVAL_MS: 700,
+  LINKEDIN_GUEST_RETRY_AFTER_MS: 60_000, // a 429 on start=0 loses the whole query
+  LINKEDIN_DESC_CONCURRENCY: 1,
+  LINKEDIN_DESC_MIN_INTERVAL_MS: 700, // AIMD floor
+  LINKEDIN_DESC_MAX_INTERVAL_MS: 6_000, // AIMD ceiling
+  LINKEDIN_FETCH_TIMEOUT_MS: 25_000,
+
+  // Remote.com public talent feed (20 rows a page against a ~6k total)
+  REMOTECOM_BASE_URL: "https://talent-api.remote.com/api/v1/public/jobs",
+  REMOTECOM_MAX_PAGES: 10,
+  REMOTECOM_PAGE_DELAY_MS: 300,
+  REMOTECOM_FETCH_TIMEOUT_MS: 25_000,
+
+  // Himalayas. `limit` is ignored — every page is 20 rows against a ~102k
+  // totalCount — so a run is always a fresh top and must say so as coverage.
+  HIMALAYAS_BASE_URL: "https://himalayas.app/jobs/api",
+  HIMALAYAS_PAGE_LIMIT: 100, // sent, but the feed caps the page at 20
+  HIMALAYAS_MAX_PAGES: 10,
+  HIMALAYAS_PAGE_DELAY_MS: 300,
+  HIMALAYAS_FETCH_TIMEOUT_MS: 25_000,
+
+  // Arbeitnow
+  ARBEITNOW_BASE_URL: "https://www.arbeitnow.com/api/job-board-api",
+  ARBEITNOW_MAX_PAGES: 10,
+  ARBEITNOW_PAGE_DELAY_MS: 300,
+  ARBEITNOW_FETCH_TIMEOUT_MS: 25_000,
+
+  // Remotive (one call, no pagination, no usable params)
+  REMOTIVE_BASE_URL: "https://remotive.com/api/remote-jobs",
+  REMOTIVE_MAX_PAGES: 1,
+  REMOTIVE_FETCH_TIMEOUT_MS: 25_000,
+
+  // Working Nomads (bare array, one call)
+  WORKINGNOMADS_BASE_URL: "https://www.workingnomads.com/api/exposed_jobs/",
+  WORKINGNOMADS_MAX_PAGES: 1,
+  WORKINGNOMADS_FETCH_TIMEOUT_MS: 25_000,
+
+  // Jobspresso. robots.txt asks Crawl-delay 3 on query URLs, and 28 pages is a
+  // 90-second run: it must not be parallelised or retried tightly.
+  JOBSPRESSO_BASE_URL: "https://jobspresso.co/wp-admin/admin-ajax.php",
+  JOBSPRESSO_PAGE_LIMIT: 100,
+  JOBSPRESSO_MAX_PAGES: 28,
+  JOBSPRESSO_PAGE_DELAY_MS: 3_000,
+  JOBSPRESSO_FETCH_TIMEOUT_MS: 25_000,
+
+  // Telegram public channel web preview (20 posts a page, `before` walks back)
+  TELEGRAM_BASE_URL: "https://t.me/s",
+  TELEGRAM_MAX_PAGES: 10,
+  TELEGRAM_PAGE_DELAY_MS: 1_200,
+  TELEGRAM_FETCH_TIMEOUT_MS: 25_000,
+  TELEGRAM_MAX_CHANNELS: 25, // per automation, mirrors ATS_MAX_COMPANIES
+
+  // Query boards fan out to one walk per keyword x geography PAIR, so the cost
+  // is the product and never either list on its own.
+  QUERY_MAX_TERMS: 10,
+  // The bound that actually matters, and it was missing: ten queries and ten
+  // geographies is a hundred pairs, each walking up to LINKEDIN_GUEST_MAX_PAGES
+  // behind a 700 ms floor — four thousand requests, three quarters of an hour,
+  // for a form the wizard let you fill in. 24 is the 6 x 4 the comment above
+  // has always described as "already a multi-minute run": about eleven minutes
+  // at full depth.
+  QUERY_MAX_PAIRS: 24,
 
   // MCP server settings
   MCP_DUPLICATE_WINDOW_DAYS: 30,
@@ -272,7 +393,17 @@ export const SCHEDULER_CONSTANTS = {
   // and hourly because taste weights move with every decision the user records
   // and freshness decays on its own.
   REACH_CRON_EXPRESSION: "17 * * * *",
-  STALE_RUN_TIMEOUT_MS: 15 * 60 * 1000, // 15 min; reaper cutoff for stuck runs
+  // How long a run may go without a heartbeat before the reaper calls it dead.
+  // Measured from AutomationRun.lastProgressAt, NOT from startedAt: a LinkedIn
+  // sweep legitimately fetches for longer than this, and reaping it flipped a
+  // live run out of the status the single-active index covers — after which
+  // "Run now" happily started a second sweep beside the first, both writing the
+  // same automation's logs and saving the same postings twice.
+  STALE_RUN_TIMEOUT_MS: 15 * 60 * 1000,
+  // Written from the same interval that polls for a cancel, so the heartbeat
+  // proves what the reaper actually wants to know: this process is alive and
+  // its event loop is turning. A deploy, an OOM or a crash stops both at once.
+  RUN_HEARTBEAT_INTERVAL_MS: 30 * 1000,
 } as const;
 
 export const JOB_SOURCES = [

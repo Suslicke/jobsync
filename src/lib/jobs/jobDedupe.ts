@@ -1,5 +1,5 @@
 import prisma from "@/lib/db";
-import { jobDedupeKey, normalizeJobUrl } from "@/lib/scraper/utils";
+import { jobDedupeKey, jobDedupeKeys, normalizeJobUrl } from "@/lib/scraper/utils";
 
 export interface ExistingJobRef {
   id: string;
@@ -27,13 +27,17 @@ export async function getExistingJobDedupeMap(
 
   const map = new Map<string, ExistingJobRef>();
   for (const job of jobs) {
-    const key = jobDedupeKey({
+    // Every key a saved job answers to, not just its URL: a role already in
+    // the list under one board's link must still be recognised when the next
+    // run finds it on another board. First writer wins per key, as before.
+    const keys = jobDedupeKeys({
       url: job.jobUrl,
       title: job.JobTitle?.label,
       company: job.Company?.label,
       location: job.Location?.label ?? undefined,
     });
-    if (!map.has(key)) {
+    for (const key of keys) {
+      if (map.has(key)) continue;
       map.set(key, {
         id: job.id,
         title: job.JobTitle?.label ?? "",

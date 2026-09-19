@@ -11,9 +11,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getAtsCompanyCount } from "@/actions/atsCompany.actions";
-import { ATS_BOARDS } from "@/models/automation.model";
-import { PROVIDER_META } from "@/components/automations/ats-search-step/types";
+import { boardsOfKind } from "@/lib/scraper/boards";
 import type { CompanyScope } from "./useCompanyScope";
+
+// Only companies boards have a company directory to browse.
+const COMPANY_BOARDS = boardsOfKind("companies");
 
 type Props = {
   scope: CompanyScope;
@@ -28,10 +30,10 @@ export function CompaniesScopeSelect({ scope, onScopeChange }: Props) {
   const onOpenChange = useCallback(
     (open: boolean) => {
       if (!open || counts) return;
-      Promise.all(ATS_BOARDS.map((p) => getAtsCompanyCount(p)))
+      Promise.all(COMPANY_BOARDS.map((b) => getAtsCompanyCount(b.id)))
         .then((totals) =>
           setCounts(
-            Object.fromEntries(ATS_BOARDS.map((p, i) => [p, totals[i]])),
+            Object.fromEntries(COMPANY_BOARDS.map((b, i) => [b.id, totals[i]])),
           ),
         )
         .catch(() => {});
@@ -56,12 +58,12 @@ export function CompaniesScopeSelect({ scope, onScopeChange }: Props) {
         </SelectGroup>
         <SelectGroup>
           <SelectLabel>Browse boards</SelectLabel>
-          {ATS_BOARDS.map((provider) => (
-            <SelectItem key={provider} value={`board:${provider}`}>
-              {PROVIDER_META[provider].label}
-              {counts?.[provider] !== undefined && (
+          {COMPANY_BOARDS.map((board) => (
+            <SelectItem key={board.id} value={`board:${board.id}`}>
+              {board.label}
+              {counts?.[board.id] !== undefined && (
                 <span className="ml-2 text-xs text-muted-foreground">
-                  {counts[provider].toLocaleString()}
+                  {counts[board.id].toLocaleString()}
                 </span>
               )}
             </SelectItem>

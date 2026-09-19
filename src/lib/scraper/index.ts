@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./utils";
+export * from "./boards";
 export * from "./mapper";
 export * from "./schedule";
 export { fetchBoardJobs, searchGreenhouseJobs } from "./greenhouse";
@@ -11,7 +12,13 @@ export { fetchAshbyBoardJobs, searchAshbyJobs } from "./ashby";
 export { mapAshbyJob } from "./ashby/mapper";
 export type { AshbyJob, AshbyCompany } from "./ashby/types";
 export { ATS_PROVIDERS } from "./ats/registry";
-export type { AtsProvider, AtsHost } from "./ats/types";
+export type {
+  AtsProvider,
+  AtsHost,
+  BoardProvider,
+  SearchOutcome,
+  ResolveResult,
+} from "./ats/types";
 export { scoreJob, passesFloor, locationMatches } from "./ats/rank";
 export {
   runAtsPipeline,

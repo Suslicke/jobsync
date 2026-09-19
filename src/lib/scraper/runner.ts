@@ -6,6 +6,7 @@ import { automationLogger } from "@/lib/automation-logger";
 import { PROVIDER_VERIFIERS } from "@/lib/ai/provider-registry.server";
 import { getOllamaBaseUrl } from "@/actions/apiKey.actions";
 import { log, withSpan } from "@/lib/telemetry";
+import { SCHEDULER_CONSTANTS } from "@/lib/constants";
 import type { ResumeWithSections, RunnerResult } from "./automation-run/types";
 import { getUserAiSettings } from "./automation-run/aiSettings";
 import { finalizeRun } from "./automation-run/finalize";
@@ -111,8 +112,35 @@ async function runAutomationTraced(
     else signal.addEventListener("abort", onParentAbort);
   }
   let dbCancelCheckInFlight = false;
+  // The reaper needs to tell "this run is taking a long time" from "this run's
+  // process is gone", and wall-clock age cannot: a LinkedIn sweep outlives the
+  // stale cutoff on its own. The heartbeat rides on this poll because the poll
+  // firing is itself the evidence — the process is up and its event loop is
+  // turning. Seeded to now so the first write lands a full interval in, while
+  // the reaper's startedAt fallback still covers the row.
+  let lastHeartbeat = Date.now();
+  let heartbeatInFlight = false;
   const cancelPoll = setInterval(() => {
     if (controller.signal.aborted) return;
+
+    if (
+      !heartbeatInFlight &&
+      Date.now() - lastHeartbeat >= SCHEDULER_CONSTANTS.RUN_HEARTBEAT_INTERVAL_MS
+    ) {
+      heartbeatInFlight = true;
+      lastHeartbeat = Date.now();
+      db.automationRun
+        .update({
+          where: { id: run.id },
+          data: { lastProgressAt: new Date() },
+        })
+        // A missed heartbeat is not worth failing a run over: the next one is
+        // 30 seconds away and the reaper only acts after the stale cutoff.
+        .catch(() => {})
+        .finally(() => {
+          heartbeatInFlight = false;
+        });
+    }
 
     // Fast path: in-memory flag (only works when /cancel shares this process).
     if (automationLogger.isCancelRequested(automation.id)) {

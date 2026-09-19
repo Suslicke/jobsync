@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PROVIDER_META } from "@/components/automations/ats-search-step/types";
+import { boardLabel } from "@/lib/scraper/boards";
 import type { JobBoard } from "@/models/automation.model";
 
 export type PendingMerge = {
@@ -35,7 +35,7 @@ export function WatchMergeDialog({ pending, onConfirm, onCancel }: Props) {
           <AlertDialogTitle>Link this board?</AlertDialogTitle>
           <AlertDialogDescription>
             You already track <strong>{pending?.existing.label}</strong>. Link
-            its {pending && PROVIDER_META[pending.provider].label} board{" "}
+            its {pending && boardLabel(pending.provider)} board{" "}
             <code>{pending?.board.token}</code> to that company?
           </AlertDialogDescription>
         </AlertDialogHeader>

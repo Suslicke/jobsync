@@ -1,5 +1,7 @@
 // Automation types and interfaces
 
+import { BOARD_IDS, type JobBoard } from "@/lib/scraper/boards";
+
 export type AutomationStatus = "active" | "paused";
 export type AutomationRunStatus =
   | "running"
@@ -14,15 +16,24 @@ export type DiscoveryStatus = "new" | "accepted" | "dismissed";
 // Order the discovered pile is read in. The server applies it across every
 // page, so the choice belongs to the query, not to the loaded slice.
 export type DiscoveredSortBy = "matchScore" | "reach" | "discoveredAt";
-export type JobBoard = "greenhouse" | "lever" | "ashby";
+// Every board is declared once, in the scraper's board table; JobBoard and the
+// scheduler's board list are derived from it rather than retyped here.
+export type { JobBoard };
 
-export interface GreenhouseCompany {
+export type LeverHost = "default" | "eu";
+
+// A company entry on a companies-kind board. `host` is optional and Lever-only
+// (every other board ignores it); it's persisted once a company is resolved so
+// runtime fetches never re-probe regions.
+export interface AtsCompany {
   name: string;
   token: string;
+  host?: LeverHost;
 }
 
-export interface GreenhouseSourceConfig {
-  companies: GreenhouseCompany[];
+// What the pipeline consumes, whatever the board fetched. Shared by all four
+// kinds so ranking, the location gate and the LLM budget stay one code path.
+export interface BaseSourceConfig {
   targetTitles?: string[];
   keywords?: string[];
   locations?: string[];
@@ -31,42 +42,46 @@ export interface GreenhouseSourceConfig {
   saveUnanalyzed?: boolean;
 }
 
-export type LeverHost = "default" | "eu";
-
-export interface LeverCompany {
-  name: string;
-  token: string;
-  host?: LeverHost; // absent/"default" = the common case
+export interface CompaniesSourceConfig extends BaseSourceConfig {
+  companies: AtsCompany[];
 }
 
-// Field-identical to Greenhouse except `companies` carries the extra `host`.
-export interface LeverSourceConfig
-  extends Omit<GreenhouseSourceConfig, "companies"> {
-  companies: LeverCompany[];
+// `locations` is deliberately NOT reused as the query geography. It and
+// strictLocation are a post-fetch gate (pipeline.ts -> rank.ts locationMatches)
+// and are never sent anywhere; `geos` is a request parameter. Same name,
+// opposite direction of travel — reusing it would quietly turn "Only show jobs
+// in these locations" into "and also fetch only those".
+export interface QuerySourceConfig extends BaseSourceConfig {
+  queries: string[];
+  geos: string[];
 }
 
-// Ashby has a single global host, so its company entries are the plain
-// {name, token} shape — no `host`, unlike Lever.
-export interface AshbyCompany {
-  name: string;
-  token: string;
+export interface FeedSourceConfig extends BaseSourceConfig {
+  maxPages?: number;
+  // Only meaningful where the board table says visaFilter; the wizard renders
+  // the toggle nowhere else.
+  visaSponsorshipOnly?: boolean;
 }
 
-export interface AshbySourceConfig
-  extends Omit<GreenhouseSourceConfig, "companies"> {
-  companies: AshbyCompany[];
+export interface ChannelSourceConfig extends BaseSourceConfig {
+  channels: string[];
 }
 
-export interface SourceConfig {
-  greenhouse?: GreenhouseSourceConfig;
-  lever?: LeverSourceConfig;
-  ashby?: AshbySourceConfig;
-}
+export type AnySourceConfig =
+  | CompaniesSourceConfig
+  | QuerySourceConfig
+  | FeedSourceConfig
+  | ChannelSourceConfig;
 
-// Plain, dependency-free board list. Do NOT import this from ats/registry.ts
-// (that pulls the network-calling search fns into client bundles). Both the
-// client-imported schema and the scheduler import it here.
-export const ATS_BOARDS: JobBoard[] = ["greenhouse", "lever", "ashby"];
+export type SourceConfig = Partial<Record<JobBoard, AnySourceConfig>>;
+
+// Kept as an alias: the ten company-picker call sites all name it, and
+// renaming them would be churn with no behaviour behind it.
+export type LeverCompany = AtsCompany;
+
+// Plain, dependency-free board list. Do NOT import ats/registry.ts for this
+// (that pulls the network-calling search fns into client bundles).
+export const ATS_BOARDS: JobBoard[] = [...BOARD_IDS];
 
 // Boards that used to exist and were removed. Their Automation rows stay in
 // the database; the UI marks them retired and only offers pause/delete.

@@ -17,7 +17,7 @@ import {
 } from "@/actions/company.actions";
 import { companyBoardUrl } from "@/lib/atsBoardUrl";
 import { toastError, toastSuccess } from "@/lib/toast";
-import { PROVIDER_META } from "@/components/automations/ats-search-step/types";
+import { boardLabel } from "@/lib/scraper/boards";
 import type { JobBoard, LeverCompany } from "@/models/automation.model";
 import type { PendingMerge } from "./WatchMergeDialog";
 
@@ -100,7 +100,7 @@ function BoardsTable({
                 {row.token}
               </TableCell>
               <TableCell className="hidden sm:table-cell text-muted-foreground">
-                {PROVIDER_META[provider].label}
+                {boardLabel(provider)}
               </TableCell>
               <TableCell>
                 <a

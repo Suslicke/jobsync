@@ -2,21 +2,19 @@
 
 import { useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { boardsOfKind } from "@/lib/scraper/boards";
 import type { JobBoard } from "@/models/automation.model";
 
-export type CompanyScope =
-  | "mine"
-  | "watchlist"
-  | "board:greenhouse"
-  | "board:lever"
-  | "board:ashby";
+// Only companies boards are browsable here: a feed or a query board has no
+// company directory to scope to.
+const COMPANY_BOARDS = boardsOfKind("companies").map((b) => b.id);
+
+export type CompanyScope = "mine" | "watchlist" | `board:${JobBoard}`;
 
 const SCOPES: CompanyScope[] = [
   "mine",
   "watchlist",
-  "board:greenhouse",
-  "board:lever",
-  "board:ashby",
+  ...COMPANY_BOARDS.map((id): CompanyScope => `board:${id}`),
 ];
 
 export function boardProvider(scope: CompanyScope): JobBoard | null {

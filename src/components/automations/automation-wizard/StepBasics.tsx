@@ -5,7 +5,9 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -17,7 +19,18 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { BOARDS, boardById, type BoardKind } from "@/lib/scraper/boards";
 import type { CreateAutomationInput } from "@/models/automation.schema";
+
+// Grouped by kind so the list reads as four ways of finding jobs rather than
+// sixteen names. Generated from the board table: a hand-written <SelectItem>
+// list is a board the scheduler can run and nobody can create.
+const KIND_GROUPS: { kind: BoardKind; label: string }[] = [
+  { kind: "companies", label: "Company boards" },
+  { kind: "query", label: "Keyword search" },
+  { kind: "feed", label: "Job feeds" },
+  { kind: "channel", label: "Channels" },
+];
 
 export function StepBasics({
   form,
@@ -55,15 +68,21 @@ export function StepBasics({
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                <SelectItem value="greenhouse">
-                  Greenhouse (company boards)
-                </SelectItem>
-                <SelectItem value="lever">Lever (company boards)</SelectItem>
-                <SelectItem value="ashby">Ashby (company boards)</SelectItem>
+                {KIND_GROUPS.map(({ kind, label }) => (
+                  <SelectGroup key={kind}>
+                    <SelectLabel>{label}</SelectLabel>
+                    {BOARDS.filter((b) => b.kind === kind).map((board) => (
+                      <SelectItem key={board.id} value={board.id}>
+                        {board.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
               </SelectContent>
             </Select>
             <FormDescription>
-              Track specific companies&apos; job boards
+              {boardById(field.value)?.wizard.description ??
+                "Where this automation looks for jobs"}
             </FormDescription>
             <FormMessage />
           </FormItem>

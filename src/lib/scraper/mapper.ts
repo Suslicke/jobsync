@@ -1,6 +1,6 @@
 import type { ScrapedJobData, DiscoveryStatus } from "@/models/automation.model";
 import db from "@/lib/db";
-import { capitalize } from "@/lib/utils";
+import { boardLabel } from "./boards";
 import {
   resolveCompany,
   resolveJobTitle,
@@ -70,16 +70,17 @@ export async function mapScrapedJobToJobRecord(
 
   // Shares the same resolve-or-create helpers (and canonical match key) as the
   // add_job path, so a company/title discovered here resolves to the same
-  // record a manual add would. Source board is title-cased for a readable
-  // JobSource label ("greenhouse" -> "Greenhouse"); the canonical value is
-  // case-insensitive so it still matches.
+  // record a manual add would. The JobSource label comes from the board table,
+  // not from capitalizing the id: capitalize() turns "workingnomads" into
+  // "Workingnomads" and "remotecom" into "Remotecom". The canonical value is
+  // case-insensitive, so an existing "Greenhouse" row still matches.
   const [title, location, company, source] = await Promise.all([
     resolveJobTitle(scrapedJob.title, userId),
     scrapedJob.location
       ? resolveLocation(scrapedJob.location, userId)
       : Promise.resolve(null),
     resolveCompany(scrapedJob.company, userId),
-    resolveJobSource(capitalize(scrapedJob.sourceBoard), userId),
+    resolveJobSource(boardLabel(scrapedJob.sourceBoard), userId),
   ]);
   const statusId = await getDefaultJobStatus();
 

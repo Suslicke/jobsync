@@ -77,6 +77,15 @@ function scoreText(score: number) {
   return `SCORES: match=${score} recommendation=strong\n\n## Summary\nGreat fit`;
 }
 
+// Distinct titles, because a batch of N openings must be N distinct ROLES:
+// dedup now collapses one company's identical title across sources, so five
+// "Frontend Engineer at Acme" cards are one job by design, not five.
+function makeJobs(count: number, description = "") {
+  return Array.from({ length: count }, (_, i) =>
+    makeJob(`Frontend Engineer ${i + 1}`, description),
+  );
+}
+
 function makeJob(title: string, description = "") {
   return {
     title,
@@ -268,12 +277,7 @@ describe("runAutomation (greenhouse)", () => {
       saveUnanalyzed: false,
     });
     (searchGreenhouseJobs as any).mockResolvedValue({
-      jobs: [
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-      ],
+      jobs: makeJobs(4, "React"),
       errors: [],
     });
 
@@ -289,13 +293,7 @@ describe("runAutomation (greenhouse)", () => {
   it("custom topK controls how many jobs get LLM analysis vs saved unanalyzed", async () => {
     const auto = automationWithGreenhouseConfig({ topK: 3 });
     (searchGreenhouseJobs as any).mockResolvedValue({
-      jobs: [
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-      ],
+      jobs: makeJobs(5, "React"),
       errors: [],
     });
 
@@ -323,13 +321,7 @@ describe("runAutomation (greenhouse)", () => {
     }
 
     function fiveFloorPassingJobs() {
-      return [
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-        makeJob("Frontend Engineer", "React"),
-      ];
+      return makeJobs(5, "React");
     }
 
     it("in-flight tasks still save after aiError fires; queued tasks never dispatch", async () => {

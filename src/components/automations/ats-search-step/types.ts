@@ -1,29 +1,17 @@
-import type { LeverSourceConfig } from "@/models/automation.model";
+import type { CompaniesSourceConfig } from "@/models/automation.model";
 
-// The step is provider-agnostic; it edits the canonical Lever config shape — a
-// superset of Greenhouse's, where the extra per-company `host` is unused and
-// UI-invisible for Greenhouse.
-export type AtsConfigValue = LeverSourceConfig;
+// The company picker edits the companies-kind config; the extra per-company
+// `host` is Lever-only and UI-invisible everywhere else.
+export type AtsConfigValue = CompaniesSourceConfig;
 
 export type EntityOption = { id: string; label: string; value: string };
 
-export const PROVIDER_META: Record<
-  string,
-  { label: string; urlHint: string; searchExample: string }
-> = {
-  greenhouse: {
-    label: "Greenhouse",
-    urlHint: "Or paste a boards.greenhouse.io link",
-    searchExample: "Anthropic",
-  },
-  lever: {
-    label: "Lever",
-    urlHint: "Or paste a jobs.lever.co link or token",
-    searchExample: "Netflix",
-  },
-  ashby: {
-    label: "Ashby",
-    urlHint: "Or paste a jobs.ashbyhq.com link or token",
-    searchExample: "Ramp",
-  },
-};
+// Chip inputs for queries, geographies and channels have no entity table
+// behind them — the value IS the string. This keeps EntityStringChipInput's
+// contract without inventing DB rows nobody asked for.
+export const noStoredOptions = async (): Promise<EntityOption[]> => [];
+export const asLocalOption = async (label: string): Promise<EntityOption> => ({
+  id: label,
+  label,
+  value: label.toLowerCase(),
+});

@@ -11,9 +11,8 @@ import {
 } from "@/models/automation.schema";
 import type { AutomationWithResume } from "@/models/automation.model";
 import { isRetiredBoard } from "@/models/automation.model";
-import { APP_CONSTANTS } from "@/lib/constants";
 import { syncSchedulerState } from "@/lib/scheduler";
-import { formatError } from "./shared";
+import { assertScheduleCapacity, formatError } from "./shared";
 
 export async function createAutomation(input: CreateAutomationInput): Promise<{
   success: boolean;
@@ -25,26 +24,11 @@ export async function createAutomation(input: CreateAutomationInput): Promise<{
 
     const validated = CreateAutomationSchema.parse(input);
 
-    const count = await db.automation.count({ where: { userId: user.id } });
-    if (count >= APP_CONSTANTS.MAX_AUTOMATIONS_PER_USER) {
-      return {
-        success: false,
-        message: `Maximum of ${APP_CONSTANTS.MAX_AUTOMATIONS_PER_USER} automations allowed per user`,
-      };
-    }
-
-    const scheduleClash = await db.automation.findFirst({
-      where: { userId: user.id, scheduleHour: validated.scheduleHour },
-      select: { id: true },
-    });
-    if (scheduleClash) {
-      return {
-        success: false,
-        message: `Another automation already runs at ${validated.scheduleHour
-          .toString()
-          .padStart(2, "0")}:00. Please choose a different time.`,
-      };
-    }
+    const capacity = await assertScheduleCapacity(
+      user.id,
+      validated.scheduleHour,
+    );
+    if (!capacity.ok) return { success: false, message: capacity.message };
 
     const resume = await db.resume.findFirst({
       where: {
@@ -152,22 +136,12 @@ export async function updateAutomation(
     }
 
     if (validated.scheduleHour !== undefined) {
-      const scheduleClash = await db.automation.findFirst({
-        where: {
-          userId: user.id,
-          scheduleHour: validated.scheduleHour,
-          id: { not: id },
-        },
-        select: { id: true },
-      });
-      if (scheduleClash) {
-        return {
-          success: false,
-          message: `Another automation already runs at ${validated.scheduleHour
-            .toString()
-            .padStart(2, "0")}:00. Please choose a different time.`,
-        };
-      }
+      const capacity = await assertScheduleCapacity(
+        user.id,
+        validated.scheduleHour,
+        id,
+      );
+      if (!capacity.ok) return { success: false, message: capacity.message };
       updateData.nextRunAt = calculateNextRunAt(validated.scheduleHour);
     }
 

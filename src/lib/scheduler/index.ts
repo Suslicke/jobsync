@@ -204,13 +204,32 @@ export function stopReachRefresh() {
   }
 }
 
-// Marks any run stuck in "running" past the stale cutoff as failed. A hard kill
+// Marks any run whose process has stopped reporting in as failed. A hard kill
 // mid-run (deploy/OOM/crash) leaves the run row in "running" forever otherwise.
+//
+// The cutoff is measured against the heartbeat, not against startedAt. Judging
+// a run by its age reaped live ones: a LinkedIn sweep of 24 keyword x
+// geography pairs fetches for longer than the cutoff, and 'running' is one of
+// the two statuses the AutomationRun_automationId_active_key partial index
+// covers — so reaping the row took the automation out of the index, both
+// single-flight guards (the scheduler's and /run's) then found no active run,
+// and a second full sweep started beside the first. That migration's own
+// comment names the consequence: duplicate concurrent runs, and duplicate
+// discovered jobs, since each run computes its own dedup snapshot.
+//
+// Rows written before the heartbeat column existed carry null, and fall back
+// to startedAt — the behaviour they were reaped under anyway.
 export async function reapStaleRuns(): Promise<number> {
   const cutoff = new Date(Date.now() - SCHEDULER_CONSTANTS.STALE_RUN_TIMEOUT_MS);
   try {
     const result = await db.automationRun.updateMany({
-      where: { status: "running", startedAt: { lt: cutoff } },
+      where: {
+        status: "running",
+        OR: [
+          { lastProgressAt: { lt: cutoff } },
+          { lastProgressAt: null, startedAt: { lt: cutoff } },
+        ],
+      },
       data: {
         status: "failed",
         errorMessage: "interrupted",

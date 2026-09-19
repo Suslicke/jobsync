@@ -570,6 +570,13 @@ model AutomationRun {
 
   startedAt   DateTime  @default(now())
   completedAt DateTime?
+  // Touched by the running process every RUN_HEARTBEAT_INTERVAL_MS. The reaper
+  // used to call a run dead purely by how long ago it started, which was fine
+  // while a run was a company watchlist and wrong the moment a LinkedIn sweep
+  // could fetch for half an hour: it flipped a live run out of 'running',
+  // which is the status the single-active partial index covers, and the next
+  // "Run now" then started a second sweep alongside the first.
+  lastProgressAt DateTime?
 
   @@index([automationId])
   @@index([startedAt])

@@ -1,5 +1,6 @@
 import { createAutomation, updateAutomation } from "@/actions/automation.actions";
 import { getCurrentUser } from "@/utils/user.utils";
+import { APP_CONSTANTS } from "@/lib/constants";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -50,19 +51,30 @@ function baseInput(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
-describe("createAutomation schedule-hour uniqueness", () => {
+// One automation per hour was the old rule; several may share a slot now,
+// because the scheduler runs them one after another in a sequential loop.
+// An hour is only full once AUTOMATIONS_PER_HOUR_MAX sit on it.
+const PER_HOUR_MAX = APP_CONSTANTS.AUTOMATIONS_PER_HOUR_MAX;
+
+// assertScheduleCapacity counts twice: the user's total, then that hour's.
+function mockCounts(total: number, atHour: number) {
+  (prisma.automation.count as any)
+    .mockResolvedValueOnce(total)
+    .mockResolvedValueOnce(atHour);
+}
+
+describe("createAutomation schedule capacity", () => {
   const mockUser = { id: "user-1" };
 
   beforeEach(() => {
     vi.clearAllMocks();
     (getCurrentUser as any).mockResolvedValue(mockUser);
-    (prisma.automation.count as any).mockResolvedValue(1);
     (prisma.resume.findFirst as any).mockResolvedValue({ id: RESUME_ID });
     (prisma.automation.create as any).mockResolvedValue({ id: "auto-1" });
   });
 
-  it("rejects a create when another automation already uses the same hour", async () => {
-    (prisma.automation.findFirst as any).mockResolvedValue({ id: "other" });
+  it("rejects a create when the hour is already full", async () => {
+    mockCounts(PER_HOUR_MAX, PER_HOUR_MAX);
 
     const result = await createAutomation(baseInput());
 
@@ -71,17 +83,38 @@ describe("createAutomation schedule-hour uniqueness", () => {
     expect(prisma.automation.create).not.toHaveBeenCalled();
   });
 
-  it("scopes the clash check to the current user and chosen hour", async () => {
-    (prisma.automation.findFirst as any).mockResolvedValue(null);
+  it("allows a second automation on an hour that already has one", async () => {
+    mockCounts(1, 1);
+
+    const result = await createAutomation(baseInput());
+
+    expect(result.success).toBe(true);
+    expect(prisma.automation.create).toHaveBeenCalled();
+  });
+
+  it("scopes the capacity check to the current user and chosen hour", async () => {
+    mockCounts(1, 0);
 
     await createAutomation(baseInput({ scheduleHour: 14 }));
 
-    const where = (prisma.automation.findFirst as any).mock.calls[0][0].where;
-    expect(where).toMatchObject({ userId: "user-1", scheduleHour: 14 });
+    expect((prisma.automation.count as any).mock.calls[1][0].where).toMatchObject({
+      userId: "user-1",
+      scheduleHour: 14,
+    });
   });
 
-  it("creates the automation when the hour is free", async () => {
-    (prisma.automation.findFirst as any).mockResolvedValue(null);
+  it("rejects a create when the user is at the automation limit", async () => {
+    mockCounts(APP_CONSTANTS.MAX_AUTOMATIONS_PER_USER, 0);
+
+    const result = await createAutomation(baseInput());
+
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/Maximum of/);
+    expect(prisma.automation.create).not.toHaveBeenCalled();
+  });
+
+  it("creates the automation when the hour has room", async () => {
+    mockCounts(1, 0);
 
     const result = await createAutomation(baseInput());
 
@@ -90,7 +123,7 @@ describe("createAutomation schedule-hour uniqueness", () => {
   });
 });
 
-describe("updateAutomation schedule-hour uniqueness", () => {
+describe("updateAutomation schedule capacity", () => {
   const mockUser = { id: "user-1" };
   const AUTO_ID = "auto-1";
 
@@ -98,13 +131,15 @@ describe("updateAutomation schedule-hour uniqueness", () => {
     vi.clearAllMocks();
     (getCurrentUser as any).mockResolvedValue(mockUser);
     (prisma.resume.findFirst as any).mockResolvedValue({ id: RESUME_ID });
+    (prisma.automation.findFirst as any).mockResolvedValue({
+      id: AUTO_ID,
+      scheduleHour: 8,
+    });
     (prisma.automation.update as any).mockResolvedValue({ id: AUTO_ID });
   });
 
-  it("rejects when another automation already uses the target hour", async () => {
-    (prisma.automation.findFirst as any)
-      .mockResolvedValueOnce({ id: AUTO_ID, scheduleHour: 8 }) // ownership lookup
-      .mockResolvedValueOnce({ id: "sibling" }); // clash check
+  it("rejects when the target hour is already full", async () => {
+    mockCounts(PER_HOUR_MAX, PER_HOUR_MAX);
 
     const result = await updateAutomation(AUTO_ID, baseInput({ scheduleHour: 9 }));
 
@@ -113,25 +148,20 @@ describe("updateAutomation schedule-hour uniqueness", () => {
     expect(prisma.automation.update).not.toHaveBeenCalled();
   });
 
-  it("excludes the automation being edited from the clash query", async () => {
-    (prisma.automation.findFirst as any)
-      .mockResolvedValueOnce({ id: AUTO_ID, scheduleHour: 8 })
-      .mockResolvedValueOnce(null);
+  it("excludes the automation being edited from the capacity count", async () => {
+    mockCounts(1, 0);
 
     await updateAutomation(AUTO_ID, baseInput({ scheduleHour: 8 }));
 
-    const clashWhere = (prisma.automation.findFirst as any).mock.calls[1][0].where;
-    expect(clashWhere).toMatchObject({
+    expect((prisma.automation.count as any).mock.calls[1][0].where).toMatchObject({
       userId: "user-1",
       scheduleHour: 8,
       id: { not: AUTO_ID },
     });
   });
 
-  it("updates when no other automation uses the hour", async () => {
-    (prisma.automation.findFirst as any)
-      .mockResolvedValueOnce({ id: AUTO_ID, scheduleHour: 8 })
-      .mockResolvedValueOnce(null);
+  it("updates when the hour has room", async () => {
+    mockCounts(1, 0);
 
     const result = await updateAutomation(AUTO_ID, baseInput({ scheduleHour: 10 }));
 

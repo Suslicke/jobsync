@@ -1,10 +1,20 @@
 import { z } from "zod";
 import { APP_CONSTANTS } from "@/lib/constants";
-// Deep-import (NOT the barrel) — utils.ts is pure; the barrel pulls scraper
-// network code into the client bundle via this file's client consumers.
-import { ATS_TOKEN_REGEX } from "@/lib/scraper/utils";
+// Deep-imports (NOT the barrel) — utils.ts and boards.ts are pure; the barrel
+// pulls scraper network code into the client bundle via this file's client
+// consumers.
+import { ATS_TOKEN_REGEX, ATS_TOKEN_MIXED_REGEX } from "@/lib/scraper/utils";
+import {
+  BOARDS,
+  BOARD_IDS,
+  boardById,
+  type BoardKind,
+  type BoardKindOf,
+  type BoardTokenCase,
+  type JobBoard,
+} from "@/lib/scraper/boards";
 
-export const JobBoardSchema = z.enum(["greenhouse", "lever", "ashby"]);
+export const JobBoardSchema = z.enum(BOARD_IDS);
 
 export const AutomationStatusSchema = z.enum(["active", "paused"]);
 
@@ -19,15 +29,8 @@ export const AutomationRunStatusSchema = z.enum([
 
 export const DiscoveryStatusSchema = z.enum(["new", "accepted", "dismissed"]);
 
-export const GreenhouseCompanySchema = z.object({
-  name: z.string().min(1).max(200),
-  token: z.string().min(1).max(80),
-});
-
-export const GreenhouseSourceConfigSchema = z.object({
-  companies: z
-    .array(GreenhouseCompanySchema)
-    .max(APP_CONSTANTS.ATS_MAX_COMPANIES),
+// The fields the pipeline consumes, whatever the board fetched.
+const BaseSourceConfigSchema = z.object({
   targetTitles: z.array(z.string().min(1).max(100)).optional(),
   keywords: z.array(z.string().min(1).max(100)).optional(),
   locations: z.array(z.string().min(1).max(100)).optional(),
@@ -36,37 +39,122 @@ export const GreenhouseSourceConfigSchema = z.object({
   saveUnanalyzed: z.boolean().optional(),
 });
 
-// Override `token` with the allowlist regex so a directly-POSTed Lever config
-// can't smuggle a malformed token past the save boundary.
-export const LeverCompanySchema = GreenhouseCompanySchema.extend({
-  token: z.string().regex(ATS_TOKEN_REGEX),
-  host: z.enum(["default", "eu"]).optional(),
+// The token allowlist rejects path/query injection before the token is ever
+// interpolated into a fetch URL, so it is applied at the save boundary too —
+// a directly-POSTed config never reaches the adapter unchecked.
+const companySchema = (tokenCase: BoardTokenCase) =>
+  z.object({
+    name: z.string().min(1).max(200),
+    token: z
+      .string()
+      .regex(tokenCase === "mixed" ? ATS_TOKEN_MIXED_REGEX : ATS_TOKEN_REGEX),
+    host: z.enum(["default", "eu"]).optional(),
+  });
+
+const companiesSourceConfigSchema = (tokenCase: BoardTokenCase) =>
+  BaseSourceConfigSchema.extend({
+    companies: z
+      .array(companySchema(tokenCase))
+      .max(APP_CONSTANTS.ATS_MAX_COMPANIES),
+  });
+
+export const CompaniesSourceConfigSchema = companiesSourceConfigSchema("lower");
+
+export const QuerySourceConfigSchema = BaseSourceConfigSchema.extend({
+  queries: z
+    .array(z.string().min(1).max(100))
+    .max(APP_CONSTANTS.QUERY_MAX_TERMS),
+  geos: z.array(z.string().min(1).max(100)).max(APP_CONSTANTS.QUERY_MAX_TERMS),
 });
 
-// Same fields/MAX/cap as Greenhouse, `companies` swapped to LeverCompanySchema.
-export const LeverSourceConfigSchema = GreenhouseSourceConfigSchema.extend({
-  companies: z
-    .array(LeverCompanySchema)
-    .max(APP_CONSTANTS.ATS_MAX_COMPANIES),
+export const FeedSourceConfigSchema = BaseSourceConfigSchema.extend({
+  maxPages: z.number().int().min(1).max(APP_CONSTANTS.JOBSPRESSO_MAX_PAGES).optional(),
+  visaSponsorshipOnly: z.boolean().optional(),
 });
 
-// Same token allowlist as Lever (rejects path/query injection at the save
-// boundary); no `host` — Ashby is single-host.
-export const AshbyCompanySchema = GreenhouseCompanySchema.extend({
-  token: z.string().regex(ATS_TOKEN_REGEX),
+export const ChannelSourceConfigSchema = BaseSourceConfigSchema.extend({
+  channels: z
+    .array(z.string().min(1).max(100))
+    .max(APP_CONSTANTS.TELEGRAM_MAX_CHANNELS),
 });
 
-export const AshbySourceConfigSchema = GreenhouseSourceConfigSchema.extend({
-  companies: z
-    .array(AshbyCompanySchema)
-    .max(APP_CONSTANTS.ATS_MAX_COMPANIES),
-});
+const KIND_SCHEMA = {
+  companies: CompaniesSourceConfigSchema,
+  query: QuerySourceConfigSchema,
+  feed: FeedSourceConfigSchema,
+  channel: ChannelSourceConfigSchema,
+} as const;
 
-export const SourceConfigSchema = z.object({
-  greenhouse: GreenhouseSourceConfigSchema.optional(),
-  lever: LeverSourceConfigSchema.optional(),
-  ashby: AshbySourceConfigSchema.optional(),
-});
+// One key per board, typed to that board's kind. Built by mapping the table
+// rather than listed by hand: a board missing from this object is stripped by
+// z.object at save time, silently, with no error anywhere to explain why the
+// automation runs against nothing.
+type SourceConfigShape = {
+  [B in JobBoard]: z.ZodOptional<(typeof KIND_SCHEMA)[BoardKindOf<B>]>;
+};
+
+export const SourceConfigSchema = z.object(
+  Object.fromEntries(
+    BOARDS.map((b) => [
+      b.id,
+      // The per-board instance differs from KIND_SCHEMA's only in which token
+      // regex it carries, which does not change the inferred type.
+      (b.kind === "companies"
+        ? companiesSourceConfigSchema(b.tokenCase)
+        : KIND_SCHEMA[b.kind]
+      ).optional(),
+    ]),
+  ) as SourceConfigShape,
+);
+
+// One refusal, not three. The runner's no_targets finalization and
+// parseBoardConfig answer the same question for their own layers; this is the
+// one the user sees, and it has to know which kind is being asked about —
+// "Select at least one company" on a feed board is advice nobody can follow.
+function refineTargets(
+  data: { jobBoard?: JobBoard; sourceConfig?: z.infer<typeof SourceConfigSchema> },
+  ctx: z.RefinementCtx,
+): void {
+  if (!data.jobBoard) return;
+  const kind: BoardKind | undefined = boardById(data.jobBoard)?.kind;
+  if (!kind) return;
+  const cfg = data.sourceConfig?.[data.jobBoard] as
+    | Record<string, unknown>
+    | undefined;
+  const count = (key: string) => {
+    const value = cfg?.[key];
+    return Array.isArray(value) ? value.length : 0;
+  };
+  const fail = (path: string, message: string) =>
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["sourceConfig", data.jobBoard as string, path],
+      message,
+    });
+
+  if (kind === "companies" && count("companies") < 1) {
+    fail("companies", "Select at least one company");
+  }
+  if (kind === "query") {
+    if (count("queries") < 1) fail("queries", "Add at least one search term");
+    if (count("geos") < 1) fail("geos", "Add at least one location to search");
+    // The per-list caps are not the bound: a query board walks one search per
+    // PAIR, so ten terms and ten locations is a hundred walks and three
+    // quarters of an hour of paced fetching — which the wizard used to accept
+    // without a word.
+    const pairs = count("queries") * count("geos");
+    if (pairs > APP_CONSTANTS.QUERY_MAX_PAIRS) {
+      fail(
+        "geos",
+        `That is ${pairs} searches (each term is searched in each location). Keep it to ${APP_CONSTANTS.QUERY_MAX_PAIRS}.`,
+      );
+    }
+  }
+  if (kind === "channel" && count("channels") < 1) {
+    fail("channels", "Add at least one channel");
+  }
+  // A feed needs nothing configured: the whole feed is the target.
+}
 
 export const CreateAutomationSchema = z
   .object({
@@ -79,16 +167,7 @@ export const CreateAutomationSchema = z
     matchThreshold: z.number().min(0).max(100),
     scheduleHour: z.number().min(0).max(23),
   })
-  .superRefine((data, ctx) => {
-    const companies = data.sourceConfig?.[data.jobBoard]?.companies ?? [];
-    if (companies.length < 1) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["sourceConfig", data.jobBoard, "companies"],
-        message: "Select at least one company",
-      });
-    }
-  });
+  .superRefine(refineTargets);
 
 export const UpdateAutomationSchema = z
   .object({
@@ -101,21 +180,8 @@ export const UpdateAutomationSchema = z
     matchThreshold: z.number().min(0).max(100).optional(),
     scheduleHour: z.number().min(0).max(23).optional(),
   })
-  .superRefine((data, ctx) => {
-    if (!data.jobBoard) return;
-    const companies = data.sourceConfig?.[data.jobBoard]?.companies ?? [];
-    if (companies.length < 1) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["sourceConfig", data.jobBoard, "companies"],
-        message: "Select at least one company",
-      });
-    }
-  });
+  .superRefine(refineTargets);
 
 export type CreateAutomationInput = z.infer<typeof CreateAutomationSchema>;
 export type UpdateAutomationInput = z.infer<typeof UpdateAutomationSchema>;
 export type SourceConfigInput = z.infer<typeof SourceConfigSchema>;
-export type GreenhouseSourceConfigInput = z.infer<
-  typeof GreenhouseSourceConfigSchema
->;

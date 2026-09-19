@@ -13,7 +13,7 @@ import { SearchInput } from "../SearchInput";
 import { JobBoardUrlAdd } from "../JobBoardUrlAdd";
 import { getCompanyById, watchBoardCompany } from "@/actions/company.actions";
 import { toastError, toastSuccess } from "@/lib/toast";
-import { PROVIDER_META } from "@/components/automations/ats-search-step/types";
+import { boardById } from "@/lib/scraper/boards";
 import { CompaniesScopeSelect } from "./companies-container/CompaniesScopeSelect";
 import { useBoardsBrowse } from "./companies-container/useBoardsBrowse";
 import { useCompaniesList } from "./companies-container/useCompaniesList";
@@ -113,7 +113,10 @@ function CompaniesContainer() {
               <div className="mb-4">
                 <JobBoardUrlAdd
                   provider={provider}
-                  placeholder={PROVIDER_META[provider].urlHint}
+                  placeholder={
+                    boardById(provider)?.wizard.urlHint ??
+                    "Or paste a board link or token"
+                  }
                   disabled={false}
                   onResolved={onUrlResolved}
                 />

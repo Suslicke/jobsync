@@ -2,9 +2,11 @@ import type {
   Automation,
   FunnelStage,
 } from "@/models/automation.model";
-import type { AtsProvider } from "../ats/types";
+import type { BoardProvider, SearchOutcome } from "../ats/types";
+import { boardById, type BoardUnit } from "../boards";
 import { runAtsPipeline } from "../ats/pipeline";
 import type { ScoredJob } from "../ats/pipeline";
+import type { JobDetails } from "../types";
 import { dedupeJobs } from "../utils";
 import { getExistingJobDedupeMap } from "@/lib/jobs/jobDedupe";
 import { automationLogger } from "@/lib/automation-logger";
@@ -15,33 +17,107 @@ import {
   getDefaultModelForProvider,
   getUserAiSettings,
 } from "./aiSettings";
-import { parseAtsConfig } from "./config";
+import { parseBoardConfig, targetCount, type BoardRunConfig } from "./config";
 import { extractResumeSkills } from "./resumeText";
 import { buildSkillTerms } from "./skillTags";
 import { persistDiscoveredJob, scalePrerank } from "./persist";
 import { matchJobToResume } from "./match";
 import { finalizeRun } from "./finalize";
 
+// The unit of work the board actually counts in, taken from the board table.
+// Three user-visible lines used to assume it was always `companies.length`, so
+// a feed run passing through unchanged would have printed "Fetching 1
+// companies".
+const UNIT_PLURAL: Record<BoardUnit, string> = {
+  company: "companies",
+  query: "queries",
+  channel: "channels",
+  feed: "feeds",
+};
+
+function counted(n: number, unit: BoardUnit): string {
+  return `${n} ${n === 1 ? unit : UNIT_PLURAL[unit]}`;
+}
+
+function describeTargets(
+  provider: BoardProvider,
+  config: BoardRunConfig,
+): string {
+  const unit = boardById(provider.id)?.unit ?? "company";
+  switch (config.kind) {
+    case "companies":
+      return counted(config.companies.length, unit);
+    case "query":
+      return `${counted(config.queries.length, unit)} x ${config.geos.length} ${config.geos.length === 1 ? "location" : "locations"}`;
+    case "channel":
+      return counted(config.channels.length, unit);
+    case "feed":
+      return "the feed";
+  }
+}
+
+// The one place the kind is read. The provider and the config agree because
+// both come from the same board id, but the compiler cannot see that through
+// the registry's Partial<Record<...>>, hence the narrowing pairs.
+async function searchBoard(
+  provider: BoardProvider,
+  config: BoardRunConfig,
+  signal?: AbortSignal,
+): Promise<SearchOutcome> {
+  if (provider.kind === "companies" && config.kind === "companies") {
+    return provider.search(config.companies, signal);
+  }
+  if (provider.kind === "query" && config.kind === "query") {
+    return provider.search(
+      { queries: config.queries, geos: config.geos },
+      signal,
+    );
+  }
+  if (provider.kind === "feed" && config.kind === "feed") {
+    return provider.search(
+      {
+        maxPages: config.maxPages,
+        visaSponsorshipOnly: config.visaSponsorshipOnly,
+      },
+      signal,
+    );
+  }
+  if (provider.kind === "channel" && config.kind === "channel") {
+    return provider.search({ channels: config.channels }, signal);
+  }
+  // Only reachable if a board's table row and its registry entry disagree
+  // about the kind, which is a mis-registration, not a runtime condition.
+  return {
+    jobs: [],
+    errors: [
+      {
+        token: provider.id,
+        reason: `configured as ${config.kind} but registered as ${provider.kind}`,
+      },
+    ],
+  };
+}
+
 export async function runAtsRun(
   automation: Automation,
-  provider: AtsProvider,
+  provider: BoardProvider,
   runId: string,
   resume: ResumeWithSections,
   signal?: AbortSignal,
 ): Promise<RunnerResult> {
   const label = `[${provider.label}]`;
-  const config = parseAtsConfig(automation.sourceConfig, automation.jobBoard);
+  const config = parseBoardConfig(automation.sourceConfig, automation.jobBoard);
 
-  if (!config || config.companies.length === 0) {
+  if (!config || targetCount(config) === 0) {
     automationLogger.log(
       automation.id,
       "error",
-      `${label} No companies configured`,
+      `${label} Nothing configured to search`,
     );
     automationLogger.endRun(automation.id);
     return await finalizeRun(runId, {
       status: "failed",
-      errorMessage: "no_companies",
+      errorMessage: "no_targets",
       jobsSearched: 0,
       jobsDeduplicated: 0,
       jobsProcessed: 0,
@@ -54,10 +130,39 @@ export async function runAtsRun(
     automationLogger.log(
       automation.id,
       "info",
-      `${label} Fetching ${config.companies.length} companies...`,
+      `${label} Fetching ${describeTargets(provider, config)}...`,
     );
 
-    const { jobs, errors } = await provider.search(config.companies);
+    // The kind decides the argument and nothing else; everything below this
+    // line is the same code the three company boards have always run.
+    const {
+      jobs: fetched,
+      errors,
+      coverage,
+    } = await searchBoard(provider, config, signal);
+
+    // A posting with no link cannot be applied to, and storing one poisons the
+    // user's whole discovery history: normalizeJobUrl("") is "", the partial
+    // index Job_userId_jobUrl_automation_key treats "" as a value, and so the
+    // FIRST link-less job a user ever saves makes every later one fail with
+    // P2002 — which persistDiscoveredJob swallows as saved:false with no log
+    // line anywhere. Five of the feed adapters emit "" when the payload carries
+    // no link (remote.com alone does it whenever either slug is missing), and
+    // the dedup keys do not catch it either: "" is falsy, so each such job takes
+    // the meta: branch and is correctly called new, only for persist to drop it.
+    //
+    // Filtered here rather than in five adapters because the rule belongs to the
+    // thing that saves, not to any one source — and counted, because the run
+    // history showed a healthy run every time it happened.
+    const jobs = fetched.filter((job) => job.url.trim());
+    const unlinkable = fetched.length - jobs.length;
+    if (unlinkable > 0) {
+      automationLogger.log(
+        automation.id,
+        "warning",
+        `${label} ${unlinkable} posting(s) carried no link and were skipped`,
+      );
+    }
 
     for (const err of errors) {
       automationLogger.log(
@@ -67,13 +172,45 @@ export async function runAtsRun(
       );
     }
 
+    // Every source failed and nothing came back. Today that finalized as
+    // `completed` with zeros, indistinguishable in the run history from a
+    // board with nothing new — and with one feed per automation that would be
+    // the common case, so a dead source would look like a quiet one.
+    if (errors.length > 0 && jobs.length === 0) {
+      automationLogger.log(
+        automation.id,
+        "error",
+        `${label} Every source failed — nothing was fetched`,
+      );
+      automationLogger.endRun(automation.id);
+      return await finalizeRun(runId, {
+        status: "failed",
+        errorMessage: "all_sources_failed",
+        jobsSearched: 0,
+        jobsDeduplicated: 0,
+        jobsProcessed: 0,
+        jobsMatched: 0,
+        jobsSaved: 0,
+      });
+    }
+
     const jobsSearched = jobs.length;
     automationLogger.log(
       automation.id,
       "success",
-      `${label} Fetched ${jobsSearched} jobs across ${config.companies.length} boards`,
+      `${label} Fetched ${jobsSearched} jobs from ${describeTargets(provider, config)}`,
       { jobsSearched },
     );
+
+    if (coverage) {
+      automationLogger.log(
+        automation.id,
+        "info",
+        coverage.available === null
+          ? `${label} Fetched ${coverage.fetched}; the source does not say how many exist`
+          : `${label} Fetched ${coverage.fetched} of ${coverage.available} available`,
+      );
+    }
 
     // Dedup against existing jobs and within this batch.
     const existingKeys = await getExistingJobDedupeMap(automation.userId);
@@ -149,6 +286,13 @@ export async function runAtsRun(
         `${label} ${pipeline.funnel.scoreCut} of them too weakly related to analyze — skipped`,
       );
     }
+    if (pipeline.funnel.scoreFloorFailedOpen) {
+      automationLogger.log(
+        automation.id,
+        "info",
+        `${label} No job cleared the score gate; ranked by recency instead`,
+      );
+    }
 
     const buildFunnel = (analyzed: number, highlighted: number): string => {
       const stages: FunnelStage[] = [
@@ -208,6 +352,47 @@ export async function runAtsRun(
         jobsMatched: 0,
         jobsSaved: 0,
       });
+    }
+
+    // Fill in what the list endpoint did not carry — descriptions, dates,
+    // employment type — on the survivors only. Boards like LinkedIn publish
+    // nothing but a card in search results, and a run must cost one detail
+    // request per job it will actually save, not one per job it saw. Bounded
+    // by topK plus the unanalyzed tier, so at most ATS_LISTING_CAP.
+    if (provider.hydrate && !signal?.aborted) {
+      const survivors = [...pipeline.toAnalyze, ...pipeline.toSaveUnanalyzed];
+      try {
+        const filled = await provider.hydrate(
+          survivors.map((s) => s.job),
+          signal,
+        );
+        // Matched by URL, not by position: a withdrawn posting (404/410) is
+        // skipped by the adapter, so the returned array is allowed to be
+        // shorter than the one handed in.
+        const byUrl = new Map<string, JobDetails>(
+          filled.map((job) => [job.url, job]),
+        );
+        let hydrated = 0;
+        for (const scored of survivors) {
+          const job = byUrl.get(scored.job.url);
+          if (!job) continue;
+          scored.job = job;
+          hydrated++;
+        }
+        automationLogger.log(
+          automation.id,
+          "info",
+          `${label} Loaded full details for ${hydrated} of ${survivors.length} listing(s)`,
+        );
+      } catch (err) {
+        // A failed detail pass costs descriptions, not the run: the listings
+        // are already ranked and still worth saving.
+        automationLogger.log(
+          automation.id,
+          "warning",
+          `${label} Could not load full listing details: ${String(err)}`,
+        );
+      }
     }
 
     const aiSettings = await getUserAiSettings(automation.userId);
