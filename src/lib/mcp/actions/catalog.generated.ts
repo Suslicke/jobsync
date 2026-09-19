@@ -50,6 +50,7 @@ import * as m45 from "@/actions/task/mutations";
 import * as m46 from "@/actions/task/queries";
 import * as m47 from "@/actions/userSettings.actions";
 import { AddCompanyFormSchema } from "@/models/addCompanyForm.schema";
+import { AddContactFormSchema } from "@/models/addContactForm.schema";
 import { AddJobFormSchema } from "@/models/addJobForm.schema";
 import { NoteFormSchema } from "@/models/note.schema";
 import { AddCertificationFormSchema } from "@/models/addCertificationForm.schema";
@@ -122,6 +123,7 @@ export const MCP_ACTIONS: Record<string, McpActionEntry> = {
   "contact.addJobContact": { fn: m15.addJobContact as any, signature: "jobId: string, contactId: string, roleId: string,", params: [{"name":"jobId","type":"string","optional":false},{"name":"contactId","type":"string","optional":false},{"name":"roleId","type":"string","optional":false}], doc: "", schemas: {  } },
   "contact.removeJobContact": { fn: m15.removeJobContact as any, signature: "linkId: string,", params: [{"name":"linkId","type":"string","optional":false}], doc: "", schemas: {  } },
   "contact.createContact": { fn: m16.createContact as any, signature: "values: ContactFormValues,", params: [{"name":"values","type":"ContactFormValues","optional":false}], doc: "", schemas: {  } },
+  "contact.upsertContactByLinkedinUrl": { fn: m16.upsertContactByLinkedinUrl as any, signature: "values: z.infer<typeof AddContactFormSchema>,", params: [{"name":"values","type":"z.infer<typeof AddContactFormSchema>","optional":false}], doc: "Find-or-create a contact, keyed on their LinkedIn profile URL. The importer on the Mac carries people out of LinkedIn posts, and a person posts more than once. Contact has no unique constraint and createContact never looks, so a second run mints the same human again — JobContact's @@unique protects ", schemas: { AddContactFormSchema } },
   "contact.updateContact": { fn: m16.updateContact as any, signature: "values: ContactFormValues,", params: [{"name":"values","type":"ContactFormValues","optional":false}], doc: "", schemas: {  } },
   "contact.deleteContactById": { fn: m16.deleteContactById as any, signature: "contactId: string,", params: [{"name":"contactId","type":"string","optional":false}], doc: "", schemas: {  } },
   "contact.getContactList": { fn: m17.getContactList as any, signature: "page: number = 1, limit: number = APP_CONSTANTS.RECORDS_PER_PAGE, search?: string, roleId?: string,", params: [{"name":"page","type":"number","optional":true},{"name":"limit","type":"number","optional":true},{"name":"search","type":"string","optional":true},{"name":"roleId","type":"string","optional":true}], doc: "Contacts get their own query rather than getReferenceEntityList: that helper counts jobs grouped by an FK on Job, and a contact reaches Job only through JobContact. The role filter has no equivalent there either.", schemas: {  } },

@@ -2,9 +2,11 @@ import {
   getContactList,
   getAllContacts,
   createContact,
+  upsertContactByLinkedinUrl,
   updateContact,
   deleteContactById,
 } from "@/actions/contact.actions";
+import { linkedinProfileKey } from "@/lib/contacts";
 import { getCurrentUser } from "@/utils/user.utils";
 import prisma from "@/lib/db";
 
@@ -111,6 +113,123 @@ describe("contact actions", () => {
       expect(data.email).toBeNull();
       expect(data.title).toBeNull();
       expect(data.companyId).toBeNull();
+    });
+  });
+
+  describe("upsertContactByLinkedinUrl", () => {
+    const dave = {
+      name: "Dave",
+      title: "CTO at Acme",
+      linkedinUrl: "https://www.linkedin.com/in/dave/",
+    } as any;
+
+    it("creates the person when no stored profile matches", async () => {
+      db.contact.create.mockResolvedValue({ id: "c1" });
+
+      const res = await upsertContactByLinkedinUrl(dave);
+
+      expect(res.success).toBe(true);
+      expect(res.created).toBe(true);
+      expect(db.contact.create.mock.calls[0][0].data.createdBy).toBe(user.id);
+    });
+
+    // The whole point: the Mac re-imports the same post authors nightly, and
+    // Contact has no unique constraint to stop a second copy.
+    it("returns the existing person instead of a second copy", async () => {
+      db.contact.findMany.mockResolvedValue([
+        { id: "c1", linkedinUrl: "https://linkedin.com/in/DAVE", title: "CTO" },
+      ]);
+
+      const res = await upsertContactByLinkedinUrl(dave);
+
+      expect(res.created).toBe(false);
+      expect(res.data.id).toBe("c1");
+      expect(db.contact.create).not.toHaveBeenCalled();
+    });
+
+    // A headline scraped off a post must not overwrite what the user typed.
+    it("fills an empty field but never overwrites one that is set", async () => {
+      db.contact.findMany.mockResolvedValue([
+        {
+          id: "c1",
+          linkedinUrl: "https://www.linkedin.com/in/dave/",
+          title: "Hand-written title",
+          email: null,
+        },
+      ]);
+
+      await upsertContactByLinkedinUrl({ ...dave, email: "dave@acme.com" });
+
+      expect(db.contact.updateMany.mock.calls[0][0].data).toEqual({
+        email: "dave@acme.com",
+      });
+    });
+
+    it("refuses a payload with no profile URL rather than creating a person nothing can match", async () => {
+      const res = await upsertContactByLinkedinUrl({ name: "Dave" } as any);
+      expect(res.success).toBe(false);
+      expect(db.contact.create).not.toHaveBeenCalled();
+    });
+
+    // createContact leans on the React form's resolver; this path has no form.
+    it("validates the payload the form would have validated", async () => {
+      const res = await upsertContactByLinkedinUrl({
+        ...dave,
+        email: "not-an-email",
+      });
+      expect(res.success).toBe(false);
+      expect(db.contact.create).not.toHaveBeenCalled();
+    });
+
+    // The importer clamps headlines to 120 before sending, because this rejects
+    // them. Both halves of that pair are asserted so they cannot drift apart in
+    // silence: 85 of 310 real LinkedIn headlines are longer than the cap and the
+    // longest is 220, and a rejection here loses the person the post was for.
+    // The fixtures on both sides used to be hand-written short titles, which is
+    // exactly why nothing caught it.
+    it("rejects a headline longer than the title column allows", async () => {
+      const res = await upsertContactByLinkedinUrl({
+        ...dave,
+        title: "x".repeat(220),
+      });
+      expect(res.success).toBe(false);
+      expect(res.message).toMatch(/title/i);
+      expect(db.contact.create).not.toHaveBeenCalled();
+    });
+
+    it("accepts one clamped to the cap", async () => {
+      db.contact.create.mockResolvedValue({ id: "c1" });
+      const res = await upsertContactByLinkedinUrl({
+        ...dave,
+        title: "x".repeat(220).slice(0, 120),
+      });
+      expect(res.success).toBe(true);
+    });
+  });
+
+  describe("linkedinProfileKey", () => {
+    it("folds www, case and a trailing slash into one key", () => {
+      expect(linkedinProfileKey("https://www.linkedin.com/in/Dave/")).toBe(
+        linkedinProfileKey("https://linkedin.com/in/dave"),
+      );
+    });
+
+    it("ignores a query string, which copying a profile often appends", () => {
+      expect(
+        linkedinProfileKey("https://www.linkedin.com/in/dave/?originalSubdomain=de"),
+      ).toBe("linkedin.com/in/dave");
+    });
+
+    it("keeps two different people apart", () => {
+      expect(linkedinProfileKey("https://www.linkedin.com/in/dave/")).not.toBe(
+        linkedinProfileKey("https://www.linkedin.com/in/dave-2/"),
+      );
+    });
+
+    it("has no key for a bare host or a non-URL", () => {
+      expect(linkedinProfileKey("https://www.linkedin.com/")).toBe("");
+      expect(linkedinProfileKey("dave")).toBe("");
+      expect(linkedinProfileKey(null)).toBe("");
     });
   });
 

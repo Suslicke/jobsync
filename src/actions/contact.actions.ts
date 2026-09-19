@@ -6,6 +6,7 @@ export {
 
 export {
   createContact,
+  upsertContactByLinkedinUrl,
   updateContact,
   deleteContactById,
 } from "./contact/mutations";
