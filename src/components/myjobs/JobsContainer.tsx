@@ -228,6 +228,14 @@ function JobsContainer({
           jobId={feedbackTarget.job.id}
           kind={feedbackTarget.kind}
           jobTitle={feedbackTarget.job.JobTitle?.label}
+          company={
+            feedbackTarget.job.Company
+              ? {
+                  id: feedbackTarget.job.Company.id,
+                  label: feedbackTarget.job.Company.label,
+                }
+              : undefined
+          }
           onSaved={onFeedbackSaved}
         />
       )}

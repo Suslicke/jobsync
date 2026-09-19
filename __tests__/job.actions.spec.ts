@@ -43,6 +43,7 @@ vi.mock("@prisma/client", () => {
     location: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
@@ -237,6 +238,59 @@ describe("jobActions", () => {
       expect(result).toEqual({
         success: false,
         message: "Not authenticated",
+      });
+    });
+
+    // A decision the user already made must hold on the next page load, or it
+    // was not a decision at all. Both of these were made on the old panel and
+    // had no home here: a passed job kept its place in the list, and a company
+    // ruled out kept sending new rows in.
+    describe("decisions that clear rows off the list", () => {
+      const whereOf = () => (prisma.job.findMany as any).mock.calls[0][0].where;
+
+      const listWith = async (...args: Parameters<typeof getJobsList>) => {
+        (getCurrentUser as any).mockResolvedValue(mockUser);
+        (prisma.job.findMany as any).mockResolvedValue([]);
+        (prisma.job.count as any).mockResolvedValue(0);
+        await getJobsList(...args);
+      };
+
+      it("keeps passed (archived) jobs and hidden employers out by default", async () => {
+        await listWith();
+        expect(whereOf().Status).toEqual({ value: { not: "archived" } });
+        expect(whereOf().Company).toEqual({ hidden: false });
+      });
+
+      it("shows them when they are what was asked for", async () => {
+        await listWith(1, 10, "archived");
+        expect(whereOf().Status).toEqual({ value: "archived" });
+        expect(whereOf().Company).toEqual({ hidden: false });
+      });
+
+      it("lists the hidden employers without turning 'hidden' into a status", async () => {
+        await listWith(1, 10, "hidden");
+        expect(whereOf().Company).toEqual({ hidden: true });
+        expect(whereOf().Status).toEqual({ value: { not: "archived" } });
+      });
+
+      it("obeys an explicit company over the blanket rule", async () => {
+        await listWith(1, 10, undefined, undefined, "stripe");
+        expect(whereOf().Company).toEqual({ value: "stripe" });
+      });
+
+      it("keeps an archived application in the application log", async () => {
+        // ?applied=true is the log of what was sent. A role passed on after
+        // applying is still an application and must not vanish from it.
+        await listWith(1, 10, undefined, undefined, undefined, true);
+        expect(whereOf().Status).toBeUndefined();
+        expect(whereOf().applied).toBe(true);
+      });
+
+      it("filters to postings that sponsor a visa", async () => {
+        await listWith(1, 10, "fit-visa");
+        expect(whereOf().fitData).toEqual({
+          contains: '"visaSponsorship":true',
+        });
       });
     });
 
@@ -526,7 +580,9 @@ describe("jobActions", () => {
         await getJobsList(1, 10);
 
         const findManyCall = (prisma.job.findMany as any).mock.calls[0][0];
-        expect(findManyCall.where.Company).toBeUndefined();
+        // No company was named, so the only thing on Company is the blanket
+        // rule that keeps ruled-out employers out of the list.
+        expect(findManyCall.where.Company).toEqual({ hidden: false });
         expect(findManyCall.where.applied).toBeUndefined();
       });
     });

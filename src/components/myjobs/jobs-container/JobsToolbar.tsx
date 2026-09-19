@@ -169,6 +169,10 @@ export function JobsToolbar({
               <SelectItem value="interview">Interview</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
+              {/* Archived rows are out of the list by default — this is where
+                  a pass is reviewed, and where it is taken back. */}
+              <SelectItem value="archived">Passed (archived)</SelectItem>
+              <SelectItem value="hidden">Hidden employers</SelectItem>
               <SelectItem value="PT">Part-time</SelectItem>
               <SelectItem value="accepted">Accepted (discovered)</SelectItem>
               <SelectItem value="dismissed">Dismissed (discovered)</SelectItem>
@@ -177,6 +181,7 @@ export function JobsToolbar({
               <SelectItem value="fit-clear">No blockers</SelectItem>
               <SelectItem value="fit-blocked">Has blockers</SelectItem>
               <SelectItem value="fit-unmeasured">Not measured</SelectItem>
+              <SelectItem value="fit-visa">Sponsors a visa</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>

@@ -330,6 +330,11 @@ model Company {
   watched         Boolean          @default(false)
   watchedAt       DateTime?
 
+  // Ruled out wholesale: the boards keep offering this employer and the job
+  // list stops showing it. The opposite of `watched`, and not a substitute for
+  // deleting the row — the jobs stay, for dedup and for history.
+  hidden          Boolean          @default(false)
+
   // Board coordinates; atsHost is Lever-only
   atsProvider     String?
   atsToken        String?

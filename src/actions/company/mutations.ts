@@ -231,3 +231,30 @@ export const deleteCompanyById = async (
     return handleError(error, msg);
   }
 };
+
+/**
+ * Rule an employer out wholesale, or let it back in.
+ *
+ * Deleting the company is not the same decision and is usually impossible
+ * anyway: its jobs are still needed so the collectors do not offer them again
+ * as new. Hiding leaves every row where it is and takes the employer out of the
+ * job list, which is what "I am never applying there" actually means.
+ */
+export const setCompanyHidden = async (
+  companyId: string,
+  hidden: boolean,
+): Promise<{ success: boolean; message?: string }> => {
+  try {
+    const user = await requireUser();
+
+    await prisma.company.update({
+      where: { id: companyId, createdBy: user.id },
+      data: { hidden },
+    });
+    revalidatePath("/dashboard/myjobs");
+    return { success: true };
+  } catch (error) {
+    const msg = "Failed to update company visibility.";
+    return handleError(error, msg);
+  }
+};

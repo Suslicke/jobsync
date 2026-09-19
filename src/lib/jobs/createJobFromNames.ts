@@ -133,6 +133,7 @@ export async function createJobFromNames(
     title: resolvedTitle.label,
     companyId: resolvedCompany.id,
     locationId: resolvedLocation?.id ?? null,
+    location: resolvedLocation?.label ?? null,
     statusId,
     jobSourceId: resolvedSource?.id ?? null,
     salaryRange: salaryRange ?? null,

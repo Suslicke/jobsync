@@ -109,7 +109,13 @@ export function reachScore(input: ReachInput): ReachResult {
 
   // `len` is the cleaned description length the analysis actually used, so this
   // asks whether there was text to read, not whether a field was populated.
-  const hasEvidence = fit != null && (fit.pct != null || (fit.len ?? 0) > 200);
+  // Length alone is not enough: 200 characters in which the analysis recognised
+  // nothing at all is a posting written in a shape this profile cannot read, and
+  // its empty blocker list says only that nobody could look. Paying the
+  // blocker-free bonus there is the same silence-rewarded-as-evidence mistake
+  // the guard exists to stop, one step further in.
+  const hasEvidence =
+    fit != null && (fit.pct != null || ((fit.len ?? 0) > 200 && (fit.termsScored ?? 0) > 0));
 
   if ((input.contacts ?? 0) > 0) terms.push({ label: "live contact", value: W.contact });
   // JobContact is filled by hand today, so an empty one means "nobody looked"

@@ -28,6 +28,7 @@ export const getCompanyList = async (
         logoUrl: true,
         watched: true,
         watchedAt: true,
+        hidden: true,
         atsProvider: true,
         atsToken: true,
         atsHost: true,

@@ -24,11 +24,16 @@ import {
   MoreVertical,
   Pencil,
   Trash,
+  Ban,
 } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { deleteCompanyById, setCompanyWatched } from "@/actions/company.actions";
+import {
+  deleteCompanyById,
+  setCompanyHidden,
+  setCompanyWatched,
+} from "@/actions/company.actions";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { DeleteAlertDialog } from "../DeleteAlertDialog";
 import { AlertDialog } from "@/models/alertDialog.model";
@@ -83,6 +88,24 @@ function CompaniesTable({
         next
           ? `${company.label} added to your watchlist`
           : `${company.label} removed from your watchlist. It stays in your Library.`,
+      );
+      reloadCompanies();
+    } else {
+      toastError(res.message);
+    }
+  };
+
+  // Hiding is not watching in reverse and not deleting either: the jobs stay
+  // (the collectors need them to recognise a repeat), they just stop being
+  // offered. This is the one place both directions are available.
+  const toggleHidden = async (company: Company) => {
+    const next = !company.hidden;
+    const res = await setCompanyHidden(company.id, next);
+    if (res.success) {
+      toastSuccess(
+        next
+          ? `${company.label} is hidden from your job list`
+          : `${company.label} is back in your job list`,
       );
       reloadCompanies();
     } else {
@@ -265,6 +288,13 @@ function CompaniesTable({
                           <Eye className="mr-2 h-4 w-4" />
                         )}
                         {company.watched ? "Unwatch" : "Watch"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="cursor-pointer"
+                        onClick={() => toggleHidden(company)}
+                      >
+                        <Ban className="mr-2 h-4 w-4" />
+                        {company.hidden ? "Show in job list" : "Hide from job list"}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-red-600 cursor-pointer"

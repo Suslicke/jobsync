@@ -13,6 +13,7 @@ export {
   addCompany,
   updateCompany,
   deleteCompanyById,
+  setCompanyHidden,
 } from "./company/mutations";
 
 export {

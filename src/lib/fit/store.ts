@@ -29,11 +29,23 @@ export async function getFitProfile(userId: string): Promise<FitProfile> {
 /** Analysis of one posting, ready to store in `Job.fitData`. */
 export async function buildFitData(
   userId: string,
-  job: { title?: string | null; description?: string | null },
+  job: {
+    title?: string | null;
+    description?: string | null;
+    /** Location label, not id: the US-only-remote rule reads the words. */
+    location?: string | null;
+  },
 ): Promise<string> {
   const profile = await getFitProfile(userId);
   return JSON.stringify(
-    analyseJob({ title: job.title ?? "", description: job.description ?? "" }, profile),
+    analyseJob(
+      {
+        title: job.title ?? "",
+        description: job.description ?? "",
+        location: job.location ?? "",
+      },
+      profile,
+    ),
   );
 }
 
@@ -44,12 +56,19 @@ export async function buildFitData(
 export async function refreshJobFit(jobId: string): Promise<void> {
   const job = await prisma.job.findUnique({
     where: { id: jobId },
-    select: { id: true, userId: true, description: true, JobTitle: { select: { label: true } } },
+    select: {
+      id: true,
+      userId: true,
+      description: true,
+      JobTitle: { select: { label: true } },
+      Location: { select: { label: true } },
+    },
   });
   if (!job) return;
   const fitData = await buildFitData(job.userId, {
     title: job.JobTitle?.label,
     description: job.description,
+    location: job.Location?.label,
   });
   await prisma.job.update({ where: { id: job.id }, data: { fitData } });
   // Reachability is built on the analysis, so it cannot outlive it: a fuller
@@ -233,6 +252,7 @@ export async function refreshStaleFits(userId: string, batchSize = 200): Promise
         description: true,
         fitData: true,
         JobTitle: { select: { label: true } },
+        Location: { select: { label: true } },
       },
       orderBy: { id: "asc" },
       take: batchSize,
@@ -244,7 +264,11 @@ export async function refreshStaleFits(userId: string, batchSize = 200): Promise
       if (!isFitStale(parseFitData(job.fitData), job.description, profile)) continue;
       const fitData = JSON.stringify(
         analyseJob(
-          { title: job.JobTitle?.label ?? "", description: job.description },
+          {
+            title: job.JobTitle?.label ?? "",
+            description: job.description,
+            location: job.Location?.label ?? "",
+          },
           profile,
         ),
       );

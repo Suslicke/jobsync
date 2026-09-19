@@ -89,6 +89,8 @@ export interface Company {
   logoUrl?: string;
   watched?: boolean;
   watchedAt?: Date | null;
+  /** Ruled out wholesale: kept for dedup, kept out of the job list. */
+  hidden?: boolean;
   atsProvider?: JobBoard | null;
   atsToken?: string | null;
   atsHost?: LeverHost | null;

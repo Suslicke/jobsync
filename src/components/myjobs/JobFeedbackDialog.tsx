@@ -14,6 +14,9 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toastError, toastSuccess } from "@/lib/toast";
 import { addJobFeedback } from "@/actions/feedback.actions";
+import { setCompanyHidden } from "@/actions/company.actions";
+import { Switch } from "../ui/switch";
+import { Label } from "../ui/label";
 import {
   APPLY_METHODS,
   LIKED_REASONS,
@@ -69,6 +72,7 @@ export function JobFeedbackDialog({
   jobId,
   kind,
   jobTitle,
+  company,
   onSaved,
 }: {
   open: boolean;
@@ -76,12 +80,15 @@ export function JobFeedbackDialog({
   jobId: string;
   kind: FeedbackKind;
   jobTitle?: string;
+  /** The employer, so a pass can be widened to all of their postings. */
+  company?: { id: string; label: string };
   onSaved?: () => void;
 }) {
   const [how, setHow] = useState<string[]>([]);
   const [liked, setLiked] = useState<string[]>([]);
   const [disliked, setDisliked] = useState<string[]>([]);
   const [note, setNote] = useState("");
+  const [hideCompany, setHideCompany] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -90,6 +97,7 @@ export function JobFeedbackDialog({
     setLiked([]);
     setDisliked([]);
     setNote("");
+    setHideCompany(false);
   }, [open, jobId, kind]);
 
   const toggle = (setter: (fn: (prev: string[]) => string[]) => void, single = false) =>
@@ -110,6 +118,12 @@ export function JobFeedbackDialog({
         note.trim() || undefined,
       );
       if (result?.success) {
+        // Widening the pass to the employer is part of the same decision, so it
+        // is saved with it — but only after the reason is safely written down.
+        if (hideCompany && company) {
+          const hidden = await setCompanyHidden(company.id, true);
+          if (!hidden?.success) toastError(hidden?.message || "Failed to hide the employer.");
+        }
         toastSuccess(kind === "applied" ? "Application recorded." : "Reason recorded.");
         onOpenChange(false);
         onSaved?.();
@@ -167,6 +181,19 @@ export function JobFeedbackDialog({
               tone="bad"
             />
           </div>
+
+          {!applied && company && (
+            <div className="flex items-center gap-2">
+              <Switch
+                id="hide-company"
+                checked={hideCompany}
+                onCheckedChange={setHideCompany}
+              />
+              <Label htmlFor="hide-company" className="text-sm font-normal">
+                Hide every job from {company.label}
+              </Label>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <p className="text-sm font-medium">Note</p>

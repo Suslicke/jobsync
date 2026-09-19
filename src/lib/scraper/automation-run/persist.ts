@@ -57,6 +57,7 @@ export async function persistDiscoveredJob(
   const fitData = await buildFitData(automation.userId, {
     title: job.title,
     description: job.description,
+    location: job.location,
   });
 
   const reach = await buildInitialReach(automation.userId, {

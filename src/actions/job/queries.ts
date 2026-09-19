@@ -110,6 +110,9 @@ const buildJobsWhereClause = (userId: string, filters: JobsListFilters) => {
       NOT: { fitData: { contains: '"blockers":[]' } },
     },
     "fit-unmeasured": { fitData: { contains: '"pct":null' } },
+    // Without the right to work in the target country, sponsorship is the whole
+    // question, so it gets a filter of its own rather than a badge to squint at.
+    "fit-visa": { fitData: { contains: '"visaSponsorship":true' } },
   };
 
   const filterBy = filter && FIT_FILTERS[filter]
@@ -123,6 +126,9 @@ const buildJobsWhereClause = (userId: string, filters: JobsListFilters) => {
         ? {
             discoveryStatus: filter,
           }
+        // Not a status and not a job type: it is answered on the company below.
+        : filter === "hidden"
+        ? {}
         : {
             Status: {
               value: filter,
@@ -145,8 +151,25 @@ const buildJobsWhereClause = (userId: string, filters: JobsListFilters) => {
     ];
   }
 
-  if (companyValue) {
-    whereClause.Company = { value: companyValue };
+  // Passing on a job archives it, and the whole point of passing is that the
+  // row leaves the working list. It comes back when the reader asks for it by
+  // name, or asks for the applications — a role passed on after applying is
+  // still an application. Without this the pass changed the record and nothing
+  // else, and the same row was reconsidered every morning.
+  if (!("Status" in whereClause) && !appliedOnly) {
+    whereClause.Status = { value: { not: "archived" } };
+  }
+
+  // A hidden employer is one the person has ruled out wholesale. Its postings
+  // keep arriving from the boards, so the list is where the ruling has to hold.
+  // Asking for the company by name beats the blanket rule — that is a request,
+  // not a default — and `filter=hidden` is how the list is reviewed and undone.
+  const companyWhere: Record<string, unknown> = {};
+  if (companyValue) companyWhere.value = companyValue;
+  if (filter === "hidden") companyWhere.hidden = true;
+  else if (!companyValue) companyWhere.hidden = false;
+  if (Object.keys(companyWhere).length > 0) {
+    whereClause.Company = companyWhere;
   }
 
   if (titleValue) {

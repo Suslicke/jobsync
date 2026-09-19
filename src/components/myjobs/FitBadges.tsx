@@ -87,6 +87,38 @@ export function FitBadges({
           </Badge>
         )}
 
+        {/* Only where sponsorship was not promised: that is the whole point of
+            the badge. "Relocation package" pays to move the boxes and says
+            nothing about a work permit, and reading it as one costs an
+            application. Beside a "visa" badge it would add nothing. */}
+        {fit.relocation && !fit.visaSponsorship && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className="h-5 px-1.5 py-0 text-[11px] font-normal border-amber-500/60 text-amber-700 dark:text-amber-400"
+              >
+                relocation only
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              Relocation help is offered; a work permit is not mentioned.
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {/* An off-role title arrives as a blocker. "Unclear" is not a blocker —
+            it is a posting whose title named nothing either way, and it is
+            shown so it can be opened rather than trusted. */}
+        {fit.role === "unclear" && (
+          <Badge
+            variant="outline"
+            className="h-5 px-1.5 py-0 text-[11px] font-normal text-muted-foreground"
+          >
+            role unclear
+          </Badge>
+        )}
+
         {fit.blockers.slice(0, max).map((b) => (
           <Badge
             key={b}

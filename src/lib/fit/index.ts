@@ -42,6 +42,33 @@ export function sponsorship(text: unknown): "yes" | "no" | null {
 /** Relocation help. Weaker than sponsorship and no substitute for it. */
 export const relocation = (text: unknown) => RE_RELOCATION.test(String(text ?? ""));
 
+// "Remote" with a US city beside it means "remote, but from the United States".
+// Without the right to work there it is not a job, it is a wasted evening — and
+// it reads exactly like open remote work until you look at the city. The city
+// names are the load-bearing half: Wellfound writes "Remote • Palo Alto", and a
+// list of country names alone would let that through.
+const RE_US_PLACE =
+  /united states|\bu\.?s\.?a?\b|\bus\b|new york|san francisco|bay area|silicon valley|palo alto|santa clara|mountain view|sunnyvale|menlo park|san jose|san mateo|seattle|austin|boston|chicago|denver|atlanta|los angeles|san diego|portland|miami|dallas|houston|phoenix|philadelphia|washington,? d\.?c|nyc\b|brooklyn|remote, us/i;
+// A two-letter state code counts only after a comma. Bare "ON" would turn
+// "hands-on" into Ontario, and "IN" every second sentence into Indiana.
+const RE_US_STATE =
+  /,\s*(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/;
+
+/**
+ * Remote work restricted to the United States, read off the location label.
+ *
+ * Only the label: a description mentioning an American office says nothing
+ * about where the work may be done from, and guessing there would blame the
+ * posting for its address.
+ */
+export function usOnlyRemote(location: unknown): boolean {
+  const loc = String(location ?? "");
+  if (!/remote|удал/i.test(loc)) return false;
+  // Said out loud that anywhere will do — the city is then a headquarters.
+  if (/anywhere|worldwide|global|everywhere/i.test(loc)) return false;
+  return RE_US_PLACE.test(loc) || RE_US_STATE.test(loc);
+}
+
 export type FitData = {
   v: number;
   /** Length of the cleaned description this was computed from. */
@@ -64,6 +91,8 @@ export type FitData = {
   visaSponsorship: boolean;
   visaRefused: boolean;
   relocation: boolean;
+  /** Remote, but only from inside the United States. See `usOnlyRemote`. */
+  usOnlyRemote: boolean;
   /** Every reason this is not the person's job, named out loud. */
   blockers: string[];
 };
@@ -74,11 +103,15 @@ export type FitData = {
  * changed while the description did not. Bump this and every cached analysis
  * expires by itself.
  */
-export const FIT_RULES_VERSION = 6;
+export const FIT_RULES_VERSION = 7;
 
 /** Analysis of one posting. Pure: same input, same record. */
 export function analyseJob(
-  { title = "", description = "" }: { title?: string; description?: string },
+  {
+    title = "",
+    description = "",
+    location = "",
+  }: { title?: string; description?: string; location?: string | null },
   profile: FitProfile = DEFAULT_PROFILE,
 ): FitData {
   const desc = cleanText(description);
@@ -105,6 +138,10 @@ export function analyseJob(
   if (primary && !primary.mine && !blockers.includes(`${primary.name} role`))
     blockers.push(`${primary.name} first`);
   if (role.fit === "no" && role.reason) blockers.push(`title: ${role.reason}`);
+  // Geography is a blocker like any other: the person cannot work in the US,
+  // so a US-only remote posting is closed to them however well the stack fits.
+  const usRemote = usOnlyRemote(location);
+  if (usRemote) blockers.push("US-only remote");
 
   const sponsor = sponsorship(desc);
   return {
@@ -126,6 +163,7 @@ export function analyseJob(
     visaSponsorship: sponsor === "yes",
     visaRefused: sponsor === "no",
     relocation: relocation(desc),
+    usOnlyRemote: usRemote,
     blockers,
   };
 }
@@ -143,6 +181,10 @@ export function analyseJob(
  * re-analyzed" was the honest report of a pass that could not see its own
  * reason to run. An analysis written before `p` existed has none and is rebuilt
  * once, which is what it needs anyway.
+ *
+ * The location is deliberately not part of the key. It is written once when the
+ * row is created, and both paths that can change it afterwards (`updateJob`,
+ * `updateJobFromNames`) call `refreshJobFit`, which recomputes unconditionally.
  */
 export function isFitStale(
   fit: FitData | null,

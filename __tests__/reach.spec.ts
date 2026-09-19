@@ -36,6 +36,7 @@ const fit = (over: Partial<FitData> = {}): FitData =>
     visaSponsorship: false,
     visaRefused: false,
     relocation: false,
+    usOnlyRemote: false,
     blockers: [],
     ...over,
   }) as FitData;
@@ -161,5 +162,23 @@ describe("buildReach", () => {
     );
     expect(parseReachData(JSON.stringify(stored))).toEqual(stored);
     expect(parseReachData("not json")).toBeNull();
+  });
+});
+
+describe("evidence", () => {
+  it("does not pay the blocker-free bonus for text it could not read", () => {
+    // 200+ characters in which the analysis recognised no technology at all:
+    // the empty blocker list says nobody could look, not that nothing is wrong.
+    const unread = reachScore({
+      fit: { v: 7, len: 900, pct: null, termsScored: 0, blockers: [], stack: {} } as never,
+      now: 0,
+    });
+    const read = reachScore({
+      fit: { v: 7, len: 900, pct: null, termsScored: 3, blockers: [], stack: {} } as never,
+      now: 0,
+    });
+    expect(unread.terms.some((t) => t.label === "no blockers")).toBe(false);
+    expect(unread.terms.some((t) => t.label === "not measured")).toBe(true);
+    expect(read.terms.some((t) => t.label === "no blockers")).toBe(true);
   });
 });

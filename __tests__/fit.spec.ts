@@ -11,6 +11,7 @@ import {
   primaryLanguage,
   roleFit,
   sponsorship,
+  usOnlyRemote,
   stack,
   stackFit,
   yearsRequired,
@@ -219,6 +220,37 @@ describe("sponsorship", () => {
   });
 });
 
+describe("usOnlyRemote", () => {
+  it("reads a US city beside the word remote as a closed door", () => {
+    // Without a US work permit these are not remote jobs, they are jobs in a
+    // country the person cannot work in — and they read identically until the
+    // city is looked at. "Remote • Palo Alto" is how Wellfound writes one.
+    expect(usOnlyRemote("Remote (US)")).toBe(true);
+    expect(usOnlyRemote("Remote • Palo Alto")).toBe(true);
+    expect(usOnlyRemote("Remote, Austin, TX")).toBe(true);
+    expect(usOnlyRemote("Remote - United States")).toBe(true);
+  });
+
+  it("keeps the postings that are open to the person", () => {
+    expect(usOnlyRemote("Remote")).toBe(false);
+    expect(usOnlyRemote("Remote, Toronto, ON")).toBe(false);
+    expect(usOnlyRemote("Remote (Worldwide)")).toBe(false);
+    // Said out loud that anywhere will do: the American office is a
+    // headquarters, not a restriction.
+    expect(usOnlyRemote("Remote anywhere · HQ in New York")).toBe(false);
+    // Not remote at all — a Berlin-reachable US office is a different question,
+    // and answering it here would make every American address a blocker.
+    expect(usOnlyRemote("New York, NY")).toBe(false);
+    expect(usOnlyRemote("")).toBe(false);
+  });
+
+  it("does not read a state code out of an ordinary word", () => {
+    // Bare "ON" turns "hands-on" into Ontario and "IN" into Indiana; the code
+    // counts only after a comma, where an address puts it.
+    expect(usOnlyRemote("Remote, hands-on delivery team")).toBe(false);
+  });
+});
+
 describe("analyseJob", () => {
   it("names every reason a posting is not the job", () => {
     const expo = analyseJob({
@@ -228,6 +260,19 @@ describe("analyseJob", () => {
     expect(expo.discipline).toBe("mobile");
     expect(expo.blockers).toContain("mobile");
     expect(expo.pct).toBeNull();
+  });
+
+  it("blocks a perfect stack that cannot be worked from here", () => {
+    const usRemote = analyseJob({
+      title: "Senior Backend Engineer",
+      description: "Python, FastAPI, PostgreSQL, Celery, RabbitMQ, Docker.",
+      location: "Remote, Austin, TX",
+    });
+    expect(usRemote.usOnlyRemote).toBe(true);
+    expect(usRemote.blockers).toContain("US-only remote");
+    // The stack still measures high — the blocker is about geography, and
+    // conflating the two would hide why the row is out.
+    expect(usRemote.pct!).toBeGreaterThan(90);
   });
 
   it("leaves a matching posting with no reasons at all", () => {
