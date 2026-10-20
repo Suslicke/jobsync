@@ -3,6 +3,7 @@ import "server-only";
 import { PROVIDER_VERIFIERS } from "@/lib/ai/provider-registry.server";
 import { getOllamaBaseUrl } from "@/actions/apiKey.actions";
 import { AiProvider } from "@/models/ai.model";
+import { CODEX_NOT_ALLOWED, isCodexAllowed } from "@/lib/ai/codex.server";
 
 /**
  * Whether the chosen provider can answer right now, for the providers where
@@ -17,6 +18,9 @@ export async function checkAiReady(
   if (provider === AiProvider.OLLAMA) {
     return PROVIDER_VERIFIERS.ollama(await getOllamaBaseUrl(userId));
   }
-  if (provider === AiProvider.CODEX) return PROVIDER_VERIFIERS.codex("");
+  if (provider === AiProvider.CODEX) {
+    if (!(await isCodexAllowed(userId))) return { success: false, error: CODEX_NOT_ALLOWED };
+    return PROVIDER_VERIFIERS.codex("");
+  }
   return null;
 }

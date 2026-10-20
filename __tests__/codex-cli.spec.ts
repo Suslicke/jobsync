@@ -29,6 +29,16 @@ chmodSync(fake, 0o755);
 process.env.CODEX_EXECUTABLE = fake;
 process.env.DATABASE_URL = "file:/secret.db";
 
+vi.mock("@/lib/db", () => ({
+  default: {
+    user: {
+      findUnique: vi.fn(async ({ where }: any) =>
+        where.id === "u-owner" ? { email: "Owner@Example.com" } : { email: "other@example.com" },
+      ),
+    },
+  },
+}));
+
 const codex = await import("@/lib/ai/codex.server");
 const { generateText } = await import("ai");
 
@@ -126,5 +136,27 @@ describe("CodexCliLanguageModel", () => {
 
   it("checks the sign-in", async () => {
     await expect(codex.verifyCodexLogin()).resolves.toEqual({ success: true });
+  });
+});
+
+describe("isCodexAllowed", () => {
+  afterEach(() => {
+    delete process.env.CODEX_ALLOWED_USERS;
+  });
+
+  it("lets nobody in when the allowlist is unset", async () => {
+    await expect(codex.isCodexAllowed("u-owner")).resolves.toBe(false);
+  });
+
+  it("matches a listed email regardless of case, and only that account", async () => {
+    process.env.CODEX_ALLOWED_USERS = "owner@example.com";
+    await expect(codex.isCodexAllowed("u-owner")).resolves.toBe(true);
+    await expect(codex.isCodexAllowed("u-other")).resolves.toBe(false);
+    await expect(codex.isCodexAllowed(undefined)).resolves.toBe(false);
+  });
+
+  it("matches a listed user id without a lookup", async () => {
+    process.env.CODEX_ALLOWED_USERS = " u-7 , u-9 ";
+    await expect(codex.isCodexAllowed("u-9")).resolves.toBe(true);
   });
 });

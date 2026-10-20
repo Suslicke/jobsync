@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pLimit from "p-limit";
+import db from "@/lib/db";
 import type {
   LanguageModelV3,
   LanguageModelV3CallOptions,
@@ -325,6 +326,25 @@ export class CodexCliLanguageModel implements LanguageModelV3 {
     return { stream };
   }
 }
+
+/**
+ * The sign-in is one person's ChatGPT plan, and JobSync is multi-user: every
+ * account on the instance would otherwise spend it. CODEX_ALLOWED_USERS lists
+ * who may (user ids or emails, comma-separated); unset means nobody.
+ */
+export async function isCodexAllowed(userId: string | undefined): Promise<boolean> {
+  const allowed = (process.env.CODEX_ALLOWED_USERS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (!userId || allowed.length === 0) return false;
+  if (allowed.includes(userId.toLowerCase())) return true;
+  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true } });
+  return !!user?.email && allowed.includes(user.email.toLowerCase());
+}
+
+export const CODEX_NOT_ALLOWED =
+  "Codex CLI is not enabled for this account (CODEX_ALLOWED_USERS on the server)";
 
 /** `codex login status`, for the settings check and the automation preflight. */
 export async function verifyCodexLogin(): Promise<{ success: boolean; error?: string }> {
