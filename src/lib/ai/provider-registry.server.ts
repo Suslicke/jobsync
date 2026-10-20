@@ -5,6 +5,7 @@ import { createOllama } from "ollama-ai-provider-v2";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { APP_CONSTANTS } from "@/lib/constants";
+import { CodexCliLanguageModel, verifyCodexLogin } from "@/lib/ai/codex.server";
 
 export const PROVIDER_FACTORIES: Record<
   string,
@@ -17,12 +18,15 @@ export const PROVIDER_FACTORIES: Record<
   ollama: (baseURL, model) =>
     createOllama({ baseURL: baseURL + "/api" })(model),
   gemini: (apiKey, model) => createGoogleGenerativeAI({ apiKey })(model),
+  codex: (_login, model) => new CodexCliLanguageModel(model),
 };
 
 export const PROVIDER_VERIFIERS: Record<
   string,
   (key: string) => Promise<{ success: boolean; error?: string }>
 > = {
+  codex: () => verifyCodexLogin(),
+
   openai: async (key) => {
     const res = await fetch("https://api.openai.com/v1/models", {
       headers: { Authorization: `Bearer ${key}` },

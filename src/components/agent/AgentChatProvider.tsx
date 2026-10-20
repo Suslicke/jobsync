@@ -251,6 +251,19 @@ function useAgentChatValue(initialMessages: UIMessage[]) {
       return;
     }
 
+    // The assistant acts through tools, and Codex CLI answers text only.
+    if (provider === AiProvider.CODEX) {
+      setPreflight({
+        checked: true,
+        ok: false,
+        error:
+          "Codex CLI scores jobs and reviews resumes, but cannot run the assistant. Pick another provider in Settings to chat.",
+        provider,
+        model: ai.model,
+      });
+      return;
+    }
+
     if (provider !== AiProvider.OLLAMA) {
       setPreflight({ checked: true, ok: true, provider, model: ai.model });
       return;

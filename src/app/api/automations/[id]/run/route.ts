@@ -8,8 +8,7 @@ import {
   getUserAiSettings,
   AutomationAlreadyRunningError,
 } from "@/lib/scraper";
-import { PROVIDER_VERIFIERS } from "@/lib/ai/provider-registry.server";
-import { getOllamaBaseUrl } from "@/actions/apiKey.actions";
+import { checkAiReady } from "@/lib/scraper/automation-run/aiReady";
 import { AiProvider } from "@/models/ai.model";
 import { isRetiredBoard, type JobBoard } from "@/models/automation.model";
 import { APP_CONSTANTS } from "@/lib/constants";
@@ -93,22 +92,17 @@ export async function POST(
     }
 
     const aiSettings = await getUserAiSettings(userId);
-    if (aiSettings.provider === AiProvider.OLLAMA) {
-      const baseUrl = await getOllamaBaseUrl(userId);
-      const ollamaCheck = await PROVIDER_VERIFIERS.ollama(baseUrl);
-      // AUTOMATION_ALLOW_UNSCORED lets the run proceed without a provider and
-      // save listings unscored for an agent to score later.
-      if (!ollamaCheck.success && process.env.AUTOMATION_ALLOW_UNSCORED !== "true") {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              ollamaCheck.error ||
-              "Ollama is not available. Please make sure Ollama is running.",
-          },
-          { status: 503 }
-        );
-      }
+    const aiCheck = await checkAiReady(aiSettings.provider, userId);
+    // AUTOMATION_ALLOW_UNSCORED lets the run proceed without a provider and
+    // save listings unscored for an agent to score later.
+    if (aiCheck && !aiCheck.success && process.env.AUTOMATION_ALLOW_UNSCORED !== "true") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: aiCheck.error || "The AI provider is not available.",
+        },
+        { status: 503 }
+      );
     }
 
     // Rate-limited last, right before the run actually launches, so failed

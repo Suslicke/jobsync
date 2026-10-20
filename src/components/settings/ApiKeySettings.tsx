@@ -49,7 +49,10 @@ interface ProviderConfig {
   sensitive: boolean;
 }
 
-const PROVIDERS: ProviderConfig[] = getAiProviders().map((entry) => ({
+// A provider that signs in elsewhere has no key to enter here.
+const PROVIDERS: ProviderConfig[] = getAiProviders()
+  .filter((entry) => entry.credentialType !== "login")
+  .map((entry) => ({
   id: entry.id as ApiKeyProvider,
   name: entry.displayName,
   placeholder: entry.keyConfig.placeholder,

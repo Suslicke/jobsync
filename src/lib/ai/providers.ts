@@ -2,7 +2,7 @@ import { resolveApiKey } from "@/lib/api-key-resolver";
 import { PROVIDER_REGISTRY } from "@/lib/ai/provider-registry";
 import { PROVIDER_FACTORIES } from "@/lib/ai/provider-registry.server";
 
-export type ProviderType = "openai" | "ollama" | "deepseek" | "openrouter" | "gemini";
+export type ProviderType = "openai" | "ollama" | "deepseek" | "openrouter" | "gemini" | "codex";
 
 export async function getModel(
   provider: ProviderType,
@@ -14,6 +14,9 @@ export async function getModel(
 
   const factory = PROVIDER_FACTORIES[provider];
   if (!factory) throw new Error(`No factory for provider: ${provider}`);
+
+  // Signed in outside JobSync; there is no credential to look up.
+  if (entry.credentialType === "login") return factory("", modelName);
 
   const credential = await resolveApiKey(userId, provider);
   if (!credential)

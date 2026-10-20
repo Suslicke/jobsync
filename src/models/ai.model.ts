@@ -20,6 +20,7 @@ export enum AiProvider {
   DEEPSEEK = "deepseek",
   GEMINI = "gemini",
   OPENROUTER = "openrouter",
+  CODEX = "codex",
 }
 
 // Default models per provider
@@ -43,6 +44,13 @@ export enum GeminiModel {
   GEMINI_2_0_FLASH_LITE = "gemini-2.0-flash-lite",
   GEMINI_1_5_PRO = "gemini-1.5-pro",
   GEMINI_1_5_FLASH = "gemini-1.5-flash",
+}
+
+// What a ChatGPT plan offers changes faster than a release; CODEX_MODEL on the
+// server overrides the default without one.
+export enum CodexModel {
+  GPT_6_1_SOL = "gpt-6.1-sol",
+  GPT_6_ASTRA = "gpt-6-astra",
 }
 
 export const defaultModel: AiModel = {

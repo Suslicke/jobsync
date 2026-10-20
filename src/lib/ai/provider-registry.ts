@@ -1,4 +1,6 @@
-export type CredentialType = "api-key" | "base-url";
+// "login": the provider signs in outside JobSync (Codex CLI's `codex login`),
+// so there is no key to store and nothing to show on the API Keys page.
+export type CredentialType = "api-key" | "base-url" | "login";
 export type ProviderCategory = "cloud" | "local";
 
 export interface ProviderRegistryEntry {
@@ -115,9 +117,25 @@ export const PROVIDER_REGISTRY: Record<string, ProviderRegistryEntry> = {
       sensitive: true,
     },
   },
+
+  codex: {
+    id: "codex",
+    displayName: "Codex CLI (ChatGPT plan)",
+    credentialType: "login",
+    category: "cloud",
+    requiresRunningCheck: true,
+    supportsKeepAlive: false,
+    keyConfig: {
+      placeholder: "",
+      inputType: "text",
+      description:
+        "Signed in on the server with `codex login`; answers text only, so the assistant chat needs another provider",
+      sensitive: false,
+    },
+  },
 };
 
-export const AI_PROVIDERS = ["ollama", "openai", "deepseek", "openrouter", "gemini"] as const;
+export const AI_PROVIDERS = ["ollama", "openai", "deepseek", "openrouter", "gemini", "codex"] as const;
 export type AiProviderId = (typeof AI_PROVIDERS)[number];
 
 export function getAiProviders(): ProviderRegistryEntry[] {

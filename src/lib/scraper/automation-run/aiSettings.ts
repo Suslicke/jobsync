@@ -7,17 +7,18 @@ import {
   OpenaiModel,
   DeepseekModel,
   GeminiModel,
+  CodexModel,
 } from "@/models/ai.model";
 import {
   defaultUserSettings,
   type AiSettings,
 } from "@/models/userSettings.model";
 
-// Ollama serializes on the GPU, so it must process matches one at a time;
-// other providers can fan out concurrently.
+// Ollama serializes on the GPU and Codex CLI on a plan's usage window, so
+// both process matches one at a time; other providers can fan out.
 export function getAutomationMatchLimit(provider: AiProvider) {
   const concurrency =
-    provider === AiProvider.OLLAMA
+    provider === AiProvider.OLLAMA || provider === AiProvider.CODEX
       ? 1
       : APP_CONSTANTS.AUTOMATION_MATCH_CONCURRENCY;
   return pLimit(concurrency);
@@ -35,6 +36,8 @@ export function getDefaultModelForProvider(provider: AiProvider): string {
       return GeminiModel.GEMINI_2_0_FLASH;
     case AiProvider.OPENROUTER:
       return "anthropic/claude-3.5-sonnet";
+    case AiProvider.CODEX:
+      return process.env.CODEX_MODEL || CodexModel.GPT_6_1_SOL;
   }
 }
 

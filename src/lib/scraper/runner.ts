@@ -9,6 +9,7 @@ import { log, withSpan } from "@/lib/telemetry";
 import { SCHEDULER_CONSTANTS } from "@/lib/constants";
 import type { ResumeWithSections, RunnerResult } from "./automation-run/types";
 import { getUserAiSettings } from "./automation-run/aiSettings";
+import { checkAiReady } from "./automation-run/aiReady";
 import { finalizeRun } from "./automation-run/finalize";
 import { runAtsRun } from "./automation-run/atsRun";
 
@@ -168,14 +169,10 @@ async function runAutomationTraced(
     // Checked here (not just in the manual /run route) so scheduled/cron
     // runs also fail fast instead of silently completing with 0 matches.
     const aiSettings = await getUserAiSettings(automation.userId);
-    if (aiSettings.provider === AiProvider.OLLAMA) {
-      const ollamaCheck = await PROVIDER_VERIFIERS.ollama(
-        await getOllamaBaseUrl(automation.userId),
-      );
-      if (!ollamaCheck.success) {
-        const message =
-          ollamaCheck.error ||
-          "Ollama is not available. Please make sure Ollama is running.";
+    const aiCheck = await checkAiReady(aiSettings.provider, automation.userId);
+    if (aiCheck) {
+      if (!aiCheck.success) {
+        const message = aiCheck.error || "The AI provider is not available.";
         // With AUTOMATION_ALLOW_UNSCORED the run continues without a provider:
         // listings are collected, ranked and saved unscored, and an MCP agent
         // scores them later (see lib/mcp/tools/getMatchQueue).
