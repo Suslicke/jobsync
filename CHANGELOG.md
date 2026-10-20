@@ -1,5 +1,136 @@
 # Changelog
 
+## [1.1.22](https://github.com/Gsync/jobsync/compare/v1.1.21...v1.1.22) (2026-10-11)
+
+
+### Features
+
+* grey out incomplete resumes in Add Job and automation pickers, flag them in the Profile table, and block saving one
+* set daily goal targets from a dialog opened by the calendar's settings button
+* compute current and 12-month best goal streaks
+* store daily goal targets per month with carry-forward, and add the save action
+* show a monthly goal summary above the daily goals calendar, with wiki help
+* add monthly goal summary maths and placeholder streaks
+* add daily goals calendar above the recent card
+* add per-month daily goal values action and helpers
+* add Clear all to the bell popover
+* add notes, size and LinkedIn URL to companies
+* make the letterhead headline editable in the export dialog, prefilled from the default resume and dropped from the PDF when blank
+* add the AI Usage section — token, call, response-time and failure cards, daily tokens by provider, provider/model and feature breakdowns with context-limit flags, failures with timeouts, and the last 50 calls
+* add getAiUsage with calendar-day buckets in the viewer's timezone, per-provider/model/feature totals, completed-call percentiles, near-context counts and the last 50 calls
+* record every AI call — chat turns (excluding nested time), nested review/match/cover letter, resume import, automation match and the Analyze button — with first visible token and timeout-vs-stop classification
+* add the AiCall table, a never-throwing per-call usage tracker with ok/error/truncated/interrupted/timed-out/stopped classification, and 90-day hourly pruning
+* add a confirmed Delete button to each resume certification, removing the section with its last entry; toast on successful certification and skills section deletes
+* make resume section Edit/Delete buttons icon-only with the job details pencil and trash icons, and give every card the same 8px button inset
+* add "Page n of N" to the bottom right of multi-page resume exports, with a Footer toggle in the export settings that is on by default and hidden for one-page resumes; report the preview's page count from the shared preview pane
+* show the date a job was added under its applied date in the jobs table; note it on the jobs help page
+* replace the preset filter with a multi-facet filter popover with live counts, URL-synced filters and a Filtered-by chip row; keep filters on reload; update the jobs help page and status-filter e2e
+* confirm before deleting a notification or clearing read ones on the notifications page; note it in the automations help page
+* add notifications page with tabs, automation filter and day groups; open the automation wizard from ?edit=1; make page rows deletable and phone-width safe
+* add header bell popover, account-menu entry and avatar dot on an event-driven notification context; refresh it when a manual run ends
+* add user-scoped notification read, dismiss, delete and summary actions
+
+### Bug Fixes
+
+* count goal streaks against defaults when settings JSON is malformed
+* show icon-only section nav on mobile so content is no longer squeezed into a narrow column
+* scroll the tab bar horizontally on mobile instead of overflowing the page
+* span the Dashboard card on the container breakpoint so Jobs & Activity keeps full width beside the docked chat panel
+* prune notifications and AI usage once a day at 03:00 instead of every hourly automation tick
+* record chat provider errors as Error and disconnects as Stopped, group rows without copying; docs(wiki): describe Settings → AI Usage
+* drop the raw error box from board rows; name the status in http_error copy and keep the raw reason as a hover tooltip
+* pair light-mode colours with the dark tints in the bell popover and rows; stop refreshing the bell when the log stream ends, before finalizeRun records notifications
+
+### Other Changes
+
+* handle empty resume list gracefully in loadResumes function
+* update Data Backup guide, refresh README features and screenshots, remove apiTest.rest
+* explain daily goal targets and real streaks
+* upgrade react-goal-calendar to 0.4.0 and find month titles by text in its spec
+* simplify layout structure and improve styling for responsiveness
+* upgrade react-goal-calendar to 0.3.0 and map its danger tone
+* explain the dashboard daily goals calendar
+* add react-goal-calendar and map its colours to app tokens
+* update default AI model from llama3.1 to qwen3.5:9b
+* add star request link to encourage users to give feedback
+* add confirmation dialog for export jobs; change icon
+* increase MCP_RATE_LIMIT_MAX from 60 to 100
+* wait for the jobs table to render before clicking sort headers in the column-sorting specs
+* explain automation notifications on the automations help page
+
+
+## [1.1.21](https://github.com/Gsync/jobsync/compare/v1.1.20...v1.1.21) (2026-09-27)
+
+
+### Features
+
+* add Wiki link and Discussions link to help menus; rename jobs table Date Applied column to Applied
+* default due date to 3 days out for MCP/agent add_job and automation-discovered jobs via shared DEFAULT_JOB_DUE_DAYS; update jobs, MCP and automations help pages
+* server-side column sorting on the jobs table via shared useSort, SortableTableHead and listSort helpers; update the jobs help page
+* filter questions and sidebar tags to one interview round via ?stage, link it from the interviews row, make edit/delete icon-only, update the help page
+* drop the Upcoming/Past/All tabs for one newest-first list, truncate long job titles, update the help page
+* restyle title/company links, add job-type/workplace/salary info, promote row shortcuts, fix company back nav
+* expand a round in place, set its outcome from the row menu, and share AddStageDialog with the job timeline
+* add the Interviews page, its sidebar entry, and the filterable interview table
+* add the interview list query, filter options, display helpers and a narrow stage-outcome action
+* add Activity and Contact quick-add shortcuts, re-icon the card, and document it in the wiki
+* show last contacted on the job Contacts tab and the interviewer's company on the stage panel
+* rename the interviewer link controls to Add and badge the Interviewer tab with its count
+* name the cascading interviewer and prep-question counts in the stage delete confirmation, and let DeleteAlertDialog take a node
+* expand prep-list answers inline, tag new questions with the TagInput, and reorder the job-details tabs
+* split the stage detail panel into Overview / Interviewer / Prep List tabs and turn the current-stage accents green
+* replace the stage stepper with a vertical Stage History rail, derive the header status from the current stage, and rename Match with AI to AI Match
+* order stages by their Library position, add stage deletion, and compact the job header controls
+* add the Stages tab listing stage types with reorder, rename and a guarded delete
+* add the Add to Prep List dialog and a creatable question-category combobox case
+* add the Link Interviewers dialog with inline contact creation, and widen getAllContacts with title and company
+* add the Add/Edit Stage dialog with custom stage types and interview-only fields
+* add the Update Status header menu, fold the status picker into it and gate the stage actions with a visible reason
+* add the Timeline tab with its stage count badge and stageless empty state
+* add the stage detail panel with interviewers, prep list, inline asked toggles and in-place notes
+* add the horizontal stage stepper and the full stage history list
+* add stage display helpers and the shared job-stages hook
+* add prep-list link, remove and asked actions, and guard question deletion
+* link and unlink stage interviewers, upserting the job's interviewer contact link
+* append a current stage when MCP updates a job's status, stop re-stamping appliedDate there, and assert stages on the job-details include
+* add stage-type list, create, rename and guarded delete actions
+* write a first current stage from every job creation path and load stages on the details page
+* make updateJobStatus and the Edit Job status field append a current stage, and stop re-stamping appliedDate
+* add job-stage read, add, edit, delete and promote actions behind a barrel
+* add the stage model types, form schema and the shared ordering/invariant helpers
+* resolve stage-type status by value on import, reseed stage types from a pre-stages file and seed them in the round-trip helper
+* add the four stage models to MODEL_SPECS, INSERT_ORDER and the Zod schema, export stage-type status by value, drop Interview
+
+### Bug Fixes
+
+* freeze the clock in ActivityForm.spec.tsx to stop a midnight flake
+* derive Applied from status and date everywhere, remove the Add Job Applied toggle, backfill applied via migration; move Add Skill beside Cover Letter in the job form; update the jobs help page
+* tell resume review, job match and automation match prompts today's date so recent dates aren't called future (#123); add a generated recent-dates resume-review eval and run it at the app's 0.3 temperature
+* scope Add Job dialog's Employment Type click to the dialog
+* adjust interviews page layout to allow wrapping of items in responsive design
+* agent panel full screen issue
+* order status lists by JOB_STATUSES and default Add Job to Draft by value, not list position
+* update dashboard quick-action button selectors after relabel
+* sort undated rounds last, restyle the row badges, move the sidebar entry after Jobs
+* scope the Ollama probe to the selected provider, label the base-URL reset, and stop the model select blanking on a provider switch
+* real OpenRouter key verification, verifier timeouts, provider error mapping, and legible dark destructive red
+* lift the job contact links into JobDetails so the tab count updates on add
+* render selected chips in pick order so resume skills match the view and PDF export
+* hold the derived-status invariant, make the job and interviewer writes atomic, keep dialog state across reloads, and scope the DatePicker and ComboBox changes
+* date the stage a status change appends, confine format/duration/location to interview stages, and unblock future dates in the stage pickers
+
+### Other Changes
+
+* rename default export function to loadRecentDatesResume for clarity
+* correct jobs, timeline and interviews help pages against the code; fix the delete-current-stage confirmation text
+* exclude log.md from wiki pages filter in tests
+* add the Interviews help page and cross-links, an end-to-end spec, and repoint the fixture's Add Job selector
+* move the board link inline after the company name on the boards browse table
+* tint the status badge palette and fold the current-stage and "via" pills into it
+* update specs for the stamped stage date, the prep answer select, the Interviewer tab badge, and the reordered job-details tabs
+* add E2E coverage for stage-to-status and interviewer-to-contacts, add the Job Timeline help page, and fix the greenhouse runner's prisma mock
+
+
 ## [1.1.20](https://github.com/Gsync/jobsync/compare/v1.1.19...v1.1.20) (2026-09-14)
 
 

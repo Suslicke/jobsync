@@ -4,6 +4,9 @@ import { handleError } from "@/lib/utils";
 import { JobStatus } from "@/models/job.model";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "../shared";
+import { appendStatusStage } from "./shared";
+import { jobFieldsForStage } from "../jobStage/shared";
+import { resolveStageTypeForStatusId } from "@/lib/jobs/resolve";
 
 export const updateJobStatus = async (
   jobId: string,
@@ -11,40 +14,33 @@ export const updateJobStatus = async (
 ): Promise<any | undefined> => {
   try {
     const user = await requireUser();
-    const dataToUpdate = () => {
-      switch (status.value) {
-        case "applied":
-          return {
-            statusId: status.id,
-            applied: true,
-            appliedDate: new Date(),
-            // Stamped here and now, so it is exact — and it must overwrite
-            // whatever precision the previous date carried, the same rule
-            // updateJobFromNames follows. An imported application marked
-            // Applied again from the table would otherwise wear its journal's
-            // "day" qualifier on a fresh timestamp, and the dashboard would
-            // bucket that instant in UTC and print it without its time.
-            appliedDatePrecision: "exact",
-          };
-        case "interview":
-          return {
-            statusId: status.id,
-            applied: true,
-          };
-        default:
-          return {
-            statusId: status.id,
-          };
-      }
-    };
 
-    const job = await prisma.job.update({
-      where: {
-        id: jobId,
-        userId: user.id,
-      },
-      data: dataToUpdate(),
+    const owned = await prisma.job.count({
+      where: { id: jobId, userId: user.id },
     });
+    if (owned === 0) throw new Error("Job not found");
+
+    // Outside the transaction on purpose: this resolve can create a row, and
+    // it writes through the base client (D4).
+    const stageTypeId = await resolveStageTypeForStatusId(status.id, user.id);
+
+    const job = await prisma.$transaction(async (tx: any) => {
+      await appendStatusStage(tx, jobId, status.id, stageTypeId, user.id);
+      const existing = await tx.job.findFirst({
+        where: { id: jobId, userId: user.id },
+        select: { appliedDate: true },
+      });
+      return tx.job.update({
+        where: { id: jobId, userId: user.id },
+        data: jobFieldsForStage(
+          status.value,
+          status.id,
+          null,
+          existing?.appliedDate ?? null,
+        ),
+      });
+    });
+
     revalidatePath("/dashboard");
     return { job, success: true };
   } catch (error) {

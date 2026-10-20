@@ -84,10 +84,10 @@ export async function createNewJob(
   const locationText = options?.location ?? `location ${suffix}`;
 
   // Matches either entry point: the dashboard quick-action card (labeled
-  // "Job") when starting from /dashboard, or the myjobs page's own inline
+  // "Add Job") when starting from /dashboard, or the myjobs page's own inline
   // trigger (labeled "New Job", from AddJob.tsx) when already on
   // /dashboard/myjobs — createNewJob is called from both contexts.
-  await page.getByRole("button", { name: /^(New )?Job$/ }).click();
+  await page.getByRole("button", { name: /^(New |Add )?Job$/ }).click();
   await expect(page).toHaveURL(/\/dashboard\/myjobs/);
   // Dashboard's "Job" button auto-opens the dialog via ?add-job=true.
   await expect(page.getByTestId("add-job-dialog-title")).toBeVisible();
@@ -108,7 +108,7 @@ export async function createNewJob(
   await pick(page, "Job Location", "Create or Search location", locationText);
   cleanup.location(locationText);
 
-  await page.getByText("Part-time").click();
+  await page.getByRole("dialog").getByText("Part-time", { exact: true }).click();
   await page.getByLabel("Job Source").click();
   await page.getByRole("option", { name: "Indeed" }).click();
   await expect(page.getByLabel("Job Source")).toContainText("Indeed");
@@ -152,6 +152,9 @@ export type CleanupRegistry = {
   automation: (name: string) => void;
   contact: (name: string) => void;
   contactRole: (name: string) => void;
+  // Unused today (both timeline flows pick seeded stage types), but a test
+  // that types a custom stage name would otherwise leave a permanent row.
+  jobStageType: (name: string) => void;
 };
 
 type Fixtures = {
@@ -181,6 +184,7 @@ export const test = base.extend<Fixtures>({
     const automations: string[] = [];
     const contacts: string[] = [];
     const contactRoles: string[] = [];
+    const jobStageTypes: string[] = [];
     await use({
       job: (id) => jobIds.push(id),
       resume: (title) => resumes.push(title),
@@ -196,6 +200,7 @@ export const test = base.extend<Fixtures>({
       automation: (name) => automations.push(name),
       contact: (name) => contacts.push(name),
       contactRole: (name) => contactRoles.push(name),
+      jobStageType: (name) => jobStageTypes.push(name),
     });
     // page.request carries the session cookie; page is still alive here
     // because cleanup tears down before the page fixture.
@@ -215,6 +220,7 @@ export const test = base.extend<Fixtures>({
         automations,
         contacts,
         contactRoles,
+        jobStageTypes,
       },
     });
     if (!res.ok()) {

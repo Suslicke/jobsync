@@ -8,17 +8,21 @@ import {
   resolveWorkplaceType,
   resolveJobStatus,
   resolveTags,
+  resolveStageTypeForStatusId,
 } from "@/lib/jobs/resolve";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 vi.mock("@prisma/client", () => {
-  const mPrismaClient = {
+  const mPrismaClient: any = {
     // findUnique belongs to the analysis refresh that follows every update;
     // it is left resolving null so this suite stays about the resolution.
     job: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    jobStage: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+    $transaction: vi.fn(),
   };
+  mPrismaClient.$transaction.mockImplementation((fn: any) => fn(mPrismaClient));
   return { PrismaClient: vi.fn(function () { return mPrismaClient; }) };
 });
 
@@ -31,6 +35,7 @@ vi.mock("@/lib/jobs/resolve", () => ({
   resolveWorkplaceType: vi.fn(),
   resolveJobStatus: vi.fn(),
   resolveTags: vi.fn(),
+  resolveStageTypeForStatusId: vi.fn(),
 }));
 
 const userId = "user-1";
@@ -53,6 +58,10 @@ describe("updateJobFromNames", () => {
     (resolveJobType as any).mockReturnValue("FT");
     (resolveWorkplaceType as any).mockReturnValue("REMOTE");
     (resolveTags as any).mockResolvedValue({ resolved: [], dropped: [] });
+    (resolveStageTypeForStatusId as any).mockResolvedValue("t-offer");
+    (prisma as any).$transaction.mockImplementation((fn: any) => fn(prisma));
+    (prisma as any).jobStage.create.mockResolvedValue({ id: "st-new" });
+    (prisma as any).jobStage.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it("returns updated:false when the job is not the caller's MCP-created job", async () => {
@@ -70,7 +79,7 @@ describe("updateJobFromNames", () => {
 
     expect(prisma.job.findFirst).toHaveBeenCalledWith({
       where: { id: "job-1", userId, createdVia: { not: null } },
-      select: { id: true, descriptionCompleteness: true },
+      select: { id: true, descriptionCompleteness: true, appliedDate: true },
     });
   });
 
@@ -151,6 +160,30 @@ describe("updateJobFromNames", () => {
     expect(data.appliedDate).toBeInstanceOf(Date);
   });
 
+  it("marks the job applied when only an appliedDate is sent", async () => {
+    const appliedDate = new Date("2026-09-01T00:00:00Z");
+    await updateJobFromNames({ jobId: "job-1", appliedDate }, userId);
+
+    const data = (prisma.job.update as any).mock.calls[0][0].data;
+    expect(data).toEqual({ appliedDate, applied: true });
+  });
+
+  it("marks the job applied when the status moves to Applied", async () => {
+    await updateJobFromNames({ jobId: "job-1", status: "Applied" }, userId);
+
+    const data = (prisma.job.update as any).mock.calls[0][0].data;
+    expect(data.applied).toBe(true);
+    expect(data.appliedDate).toBeInstanceOf(Date);
+  });
+
+  it("leaves applied alone for a status that doesn't imply applying", async () => {
+    await updateJobFromNames({ jobId: "job-1", status: "archived" }, userId);
+
+    expect((prisma.job.update as any).mock.calls[0][0].data).not.toHaveProperty(
+      "applied",
+    );
+  });
+
   it("returns updated:false with a not-found message on P2025", async () => {
     (prisma.job.update as any).mockRejectedValue({ code: "P2025" });
 
@@ -169,5 +202,58 @@ describe("updateJobFromNames", () => {
     expect(result.updated).toBe(false);
     expect(result.message).toContain("No fields to update");
     expect(prisma.job.update).not.toHaveBeenCalled();
+  });
+
+  // D9: the sixth write path to Job.statusId keeps the timeline in step.
+  it("appends a current stage when MCP changes the job's status", async () => {
+    (resolveJobStatus as any).mockResolvedValue("s-offer");
+    (prisma as any).jobStage.findFirst.mockResolvedValue({
+      id: "st-int",
+      StageType: { statusId: "s-int", Status: { value: "interview" } },
+    });
+
+    await updateJobFromNames({ jobId: "job-1", status: "offer" }, userId);
+
+    expect((prisma as any).jobStage.create.mock.calls[0][0].data).toMatchObject({
+      jobId: "job-1",
+      stageTypeId: "t-offer",
+      occurredAt: expect.any(Date),
+    });
+  });
+
+  // Decision 16's rule, reached through MCP: the comparison is on parent
+  // status, so re-sending a status the job already holds is a no-op.
+  it("appends nothing when the current stage already carries that status", async () => {
+    (resolveJobStatus as any).mockResolvedValue("s-int");
+    (prisma as any).jobStage.findFirst.mockResolvedValue({
+      id: "st-tech",
+      StageType: { statusId: "s-int", Status: { value: "interview" } },
+    });
+
+    await updateJobFromNames({ jobId: "job-1", status: "interview" }, userId);
+
+    expect((prisma as any).jobStage.create).not.toHaveBeenCalled();
+  });
+
+  it("leaves the timeline alone when no status field was sent", async () => {
+    await updateJobFromNames({ jobId: "job-1", salaryRange: "100k" }, userId);
+
+    expect(resolveStageTypeForStatusId).not.toHaveBeenCalled();
+    expect((prisma as any).jobStage.create).not.toHaveBeenCalled();
+  });
+
+  // D5, now covering the MCP path as well.
+  it("never re-stamps an appliedDate the job already has", async () => {
+    (prisma.job.findFirst as any).mockResolvedValue({
+      id: "job-1",
+      descriptionCompleteness: null,
+      appliedDate: new Date("2026-09-03T00:00:00Z"),
+    });
+
+    await updateJobFromNames({ jobId: "job-1", applied: true }, userId);
+
+    expect((prisma.job.update as any).mock.calls[0][0].data).not.toHaveProperty(
+      "appliedDate",
+    );
   });
 });

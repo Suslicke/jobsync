@@ -1,16 +1,30 @@
 "use client";
-import { Calendar, MapPin, PlusCircle, StickyNote } from "lucide-react";
+import {
+  Calendar,
+  DollarSign,
+  MapPin,
+  Pencil,
+  PlusCircle,
+  StickyNote,
+  Trash,
+} from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { CircularScore } from "@/components/CircularScore";
-import { JobResponse, JobStatus } from "@/models/job.model";
+import {
+  JobResponse,
+  JobStatus,
+  getJobTypeLabel,
+  getWorkplaceTypeLabel,
+} from "@/models/job.model";
 import { JobStatusBadge } from "./JobStatusBadge";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { MatchJobButton } from "./MatchJobButton";
+import { CompanyLogo } from "./CompanyLogo";
 import { FitBadges } from "./FitBadges";
 import { ReachBadge } from "./ReachBadge";
-import { CompanyLogo } from "./CompanyLogo";
 
 type JobCardProps = {
   job: JobResponse;
@@ -18,8 +32,8 @@ type JobCardProps = {
   editJob: (id: string) => void;
   onChangeJobStatus: (id: string, status: JobStatus) => void;
   onAddNote: (jobId: string) => void;
-  onFeedback?: (job: JobResponse, kind: "applied" | "passed") => void;
   onDeleteJob: (jobId: string) => void;
+  onFeedback?: (job: JobResponse, kind: "applied" | "passed") => void;
 };
 
 export function JobCard({
@@ -28,8 +42,8 @@ export function JobCard({
   editJob,
   onChangeJobStatus,
   onAddNote,
-  onFeedback,
   onDeleteJob,
+  onFeedback,
 }: JobCardProps) {
   const notesCount = job._count?.Notes ?? 0;
 
@@ -44,7 +58,7 @@ export function JobCard({
           <div className="flex items-center gap-1.5">
             <Link
               href={`/dashboard/myjobs/${job?.id}`}
-              className="truncate font-semibold"
+              className="truncate font-semibold text-primary underline-offset-4 hover:underline"
             >
               {job.JobTitle?.label}
             </Link>
@@ -58,9 +72,18 @@ export function JobCard({
               </Badge>
             )}
           </div>
-          <p className="truncate text-sm text-muted-foreground">
-            {job.Company?.label}
-          </p>
+          {job.Company?.id ? (
+            <Link
+              href={`/dashboard/admin/companies/${job.Company.id}`}
+              className="block truncate text-sm text-teal-600 underline-offset-4 hover:underline"
+            >
+              {job.Company.label}
+            </Link>
+          ) : (
+            <p className="truncate text-sm text-muted-foreground">
+              {job.Company?.label}
+            </p>
+          )}
         </div>
         {job.matchScore != null ? (
           <CircularScore score={job.matchScore} size="sm" animate={false} />
@@ -78,12 +101,22 @@ export function JobCard({
         )}
         <span className="flex items-center gap-1 whitespace-nowrap">
           <Calendar className="h-3.5 w-3.5 shrink-0" />
-          {job.appliedDate ? format(job.appliedDate, "PP") : "Not applied"}
+          {job.appliedDate
+            ? format(job.appliedDate, "PP")
+            : job.applied
+              ? "Applied"
+              : "Not applied"}
         </span>
         {job.JobSource?.label && (
           <span className="flex min-w-0 items-center gap-1">
             <PlusCircle className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{job.JobSource.label}</span>
+          </span>
+        )}
+        {job.salaryRange && (
+          <span className="flex min-w-0 items-center gap-1">
+            <DollarSign className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{job.salaryRange}</span>
           </span>
         )}
       </div>
@@ -93,17 +126,46 @@ export function JobCard({
         <ReachBadge reachScore={job.reachScore} reachData={job.reachData} />
       </div>
 
-      <div className="mt-auto flex items-center justify-between border-t pt-3">
-        <JobStatusBadge job={job} />
-        <JobActionsMenu
-          job={job}
-          jobStatuses={jobStatuses}
-          editJob={editJob}
-          onChangeJobStatus={onChangeJobStatus}
-          onAddNote={onAddNote}
-          onFeedback={onFeedback}
-          onDeleteJob={onDeleteJob}
-        />
+      <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <JobStatusBadge job={job} />
+          <span className="truncate text-xs text-muted-foreground">
+            {[
+              getJobTypeLabel(job.jobType),
+              job.workplaceType ? getWorkplaceTypeLabel(job.workplaceType) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Edit Job"
+            aria-label="Edit Job"
+            onClick={() => editJob(job.id)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Delete Job"
+            aria-label="Delete Job"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onDeleteJob(job.id)}
+          >
+            <Trash className="h-4 w-4" />
+          </Button>
+          <JobActionsMenu
+            job={job}
+            jobStatuses={jobStatuses}
+            onChangeJobStatus={onChangeJobStatus}
+            onAddNote={onAddNote}
+            onFeedback={onFeedback}
+          />
+        </div>
       </div>
     </div>
   );

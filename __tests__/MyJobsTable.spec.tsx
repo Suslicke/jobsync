@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import MyJobsTable from "@/components/myjobs/MyJobsTable";
 import type { JobResponse, JobStatus } from "@/models/job.model";
@@ -56,6 +56,8 @@ function renderTable(jobs: JobResponse[], overrides: Partial<React.ComponentProp
     editJob,
     onChangeJobStatus,
     onAddNote,
+    sort: null,
+    onSort: vi.fn(),
     ...overrides,
   };
   const result = render(<MyJobsTable {...props} />);
@@ -69,14 +71,16 @@ describe("MyJobsTable", () => {
     expect(screen.getByText("Software Engineer")).toBeInTheDocument();
     expect(screen.getByText("Acme Corp")).toBeInTheDocument();
     expect(screen.getByText("Remote")).toBeInTheDocument();
-    expect(screen.getByText("Applied")).toBeInTheDocument();
+    const statusButton = screen.getByRole("button", { name: /Change status/ });
+    expect(within(statusButton).getByText("Applied")).toBeInTheDocument();
   });
 
   it("shows a Dismissed badge for discovered jobs regardless of status", () => {
     renderTable([makeJob({ discoveryStatus: "dismissed", Status: { id: "1", label: "Applied", value: "applied" } })]);
 
     expect(screen.getByText("Dismissed")).toBeInTheDocument();
-    expect(screen.queryByText("Applied")).not.toBeInTheDocument();
+    const statusButton = screen.getByRole("button", { name: /Change status/ });
+    expect(within(statusButton).queryByText("Applied")).not.toBeInTheDocument();
   });
 
   it("shows an Expired badge for past-due draft jobs", () => {
@@ -99,7 +103,8 @@ describe("MyJobsTable", () => {
     ]);
 
     expect(screen.queryByText("Expired")).not.toBeInTheDocument();
-    expect(screen.getByText("Applied")).toBeInTheDocument();
+    const statusButton = screen.getByRole("button", { name: /Change status/ });
+    expect(within(statusButton).getByText("Applied")).toBeInTheDocument();
   });
 
   it("renders a match score when present, and a Match button otherwise", () => {
@@ -114,6 +119,8 @@ describe("MyJobsTable", () => {
         editJob={vi.fn()}
         onChangeJobStatus={vi.fn()}
         onAddNote={vi.fn()}
+        sort={null}
+        onSort={vi.fn()}
       />,
     );
     expect(screen.getByRole("link", { name: /match/i })).toHaveAttribute(
@@ -129,9 +136,11 @@ describe("MyJobsTable", () => {
       expect(
         screen.queryByRole("link", { name: /match/i }),
       ).not.toBeInTheDocument();
-      // Not by name: the column header is a sort button reading "Match" as
-      // well since the table learned to sort by that column.
-      expect(screen.getByTitle("The assistant is busy")).toBeDisabled();
+      // The sortable "Match" column header is also a button named /match/i now.
+      const matchButtons = screen.getAllByRole("button", { name: /match/i });
+      expect(matchButtons.some((b) => (b as HTMLButtonElement).disabled)).toBe(
+        true,
+      );
     } finally {
       chat.busy = false;
     }
@@ -149,6 +158,8 @@ describe("MyJobsTable", () => {
         editJob={vi.fn()}
         onChangeJobStatus={vi.fn()}
         onAddNote={vi.fn()}
+        sort={null}
+        onSort={vi.fn()}
       />,
     );
     expect(screen.queryByText("0")).not.toBeInTheDocument();
@@ -169,8 +180,7 @@ describe("MyJobsTable", () => {
     it("calls editJob with the job id when Edit Job is clicked", async () => {
       const { editJob } = renderTable([makeJob()]);
 
-      await user.click(screen.getByTestId("job-actions-menu-btn"));
-      await user.click(screen.getByText("Edit Job"));
+      await user.click(screen.getByRole("button", { name: "Edit Job" }));
 
       expect(editJob).toHaveBeenCalledWith("job-1");
     });
@@ -187,8 +197,7 @@ describe("MyJobsTable", () => {
     it("opens the delete confirmation dialog and calls deleteJob on confirm", async () => {
       const { deleteJob } = renderTable([makeJob()]);
 
-      await user.click(screen.getByTestId("job-actions-menu-btn"));
-      await user.click(screen.getByText("Delete"));
+      await user.click(screen.getByRole("button", { name: "Delete Job" }));
 
       expect(
         screen.getByText("Are you sure you want to delete this job?"),

@@ -11,7 +11,7 @@ import { dedupeJobs } from "../utils";
 import { getExistingJobDedupeMap } from "@/lib/jobs/jobDedupe";
 import { automationLogger } from "@/lib/automation-logger";
 import { log } from "@/lib/telemetry";
-import type { RunnerResult, ResumeWithSections } from "./types";
+import type { BoardFailure, RunnerResult, ResumeWithSections } from "./types";
 import {
   getAutomationMatchLimit,
   getDefaultModelForProvider,
@@ -172,20 +172,32 @@ export async function runAtsRun(
       );
     }
 
-    // Every source failed and nothing came back. Today that finalized as
-    // `completed` with zeros, indistinguishable in the run history from a
-    // board with nothing new — and with one feed per automation that would be
-    // the common case, so a dead source would look like a quiet one.
-    if (errors.length > 0 && jobs.length === 0) {
-      automationLogger.log(
-        automation.id,
-        "error",
-        `${label} Every source failed — nothing was fetched`,
-      );
+    // Only a company board has names to put on its tokens; a feed, query or
+    // channel reports the token itself.
+    const nameByToken = new Map(
+      config.kind === "companies"
+        ? config.companies.map((c) => [c.token, c.name] as const)
+        : [],
+    );
+    const boardErrors: BoardFailure[] = errors.map((e) => ({
+      token: e.token,
+      name: nameByToken.get(e.token) ?? e.token,
+      reason: e.reason,
+    }));
+    const total = targetCount(config);
+
+    // Every source failed. Before this check a run like that finalized as
+    // `completed` with zeros, indistinguishable in the run history from a board
+    // with nothing new — and with one feed per automation that would be the
+    // common case, so a dead source would look like a quiet one.
+    if (errors.length > 0 && errors.length >= total && jobs.length === 0) {
+      const message = `All ${total} boards unreachable`;
+      automationLogger.log(automation.id, "error", `${label} ${message}`);
       automationLogger.endRun(automation.id);
       return await finalizeRun(runId, {
         status: "failed",
-        errorMessage: "all_sources_failed",
+        errorMessage: message,
+        boardErrors,
         jobsSearched: 0,
         jobsDeduplicated: 0,
         jobsProcessed: 0,
@@ -193,6 +205,17 @@ export async function runAtsRun(
         jobsSaved: 0,
       });
     }
+
+    const boardNote =
+      errors.length > 0 ? `${errors.length} of ${total} boards unreachable` : null;
+    // One place decides the terminal status for every completed path below.
+    const outcome = (aiError: string | null) => ({
+      status: aiError || boardNote ? ("completed_with_errors" as const) : ("completed" as const),
+      // Joined only for Run History; notifications read aiError directly.
+      errorMessage: [aiError, boardNote].filter(Boolean).join("; ") || undefined,
+      aiError: aiError ?? undefined,
+      boardErrors,
+    });
 
     const jobsSearched = jobs.length;
     automationLogger.log(
@@ -232,7 +255,7 @@ export async function runAtsRun(
       );
       automationLogger.endRun(automation.id);
       return await finalizeRun(runId, {
-        status: "completed",
+        ...outcome(null),
         jobsSearched,
         jobsDeduplicated: 0,
         jobsProcessed: 0,
@@ -344,7 +367,7 @@ export async function runAtsRun(
       );
       automationLogger.endRun(automation.id);
       return await finalizeRun(runId, {
-        status: "completed",
+        ...outcome(null),
         funnelStats: buildFunnel(0, 0),
         jobsSearched,
         jobsDeduplicated,
@@ -609,8 +632,7 @@ export async function runAtsRun(
     automationLogger.endRun(automation.id);
 
     return await finalizeRun(runId, {
-      status: signal?.aborted ? "cancelled" : aiError ? "completed_with_errors" : "completed",
-      errorMessage: aiError || undefined,
+      ...(signal?.aborted ? { status: "cancelled" as const } : outcome(aiError)),
       funnelStats: buildFunnel(analyzed, highlighted),
       jobsSearched,
       jobsDeduplicated,

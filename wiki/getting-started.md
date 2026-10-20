@@ -3,8 +3,8 @@ type: tutorial
 title: Getting Started
 description: The first run through JobSync — creating an account, connecting an AI provider, adding a job, and what each sidebar area is for.
 feature: setup
-tags: [setup, first run, sign in, account, ai provider, ollama, sidebar, navigation]
-aliases: [new user, onboarding, first steps, how do I start, set up jobsync]
+tags: [setup, first run, sign in, account, ai provider, ollama, sidebar, navigation, dashboard, quick add, shortcuts, ai usage, tokens, goals, daily goals, calendar]
+aliases: [new user, onboarding, first steps, how do I start, set up jobsync, how much ai am i using]
 status: stable
 stale_after: 2027-08-31
 ---
@@ -19,7 +19,13 @@ Open the app and choose **Create Account** on the sign-in page, or go straight t
 
 Open the avatar menu at the bottom of the left sidebar and choose **Settings**, then **AI Provider**. Pick a provider, then a model. JobSync supports Ollama, OpenAI, DeepSeek, Gemini and OpenRouter. Ollama runs models on your own machine and needs no key; the other four are hosted and need an API key, which you add under **Settings → API Keys** in that same menu. Keys are encrypted before they are stored.
 
+If you run Ollama somewhere other than the default address, add that address under **Settings → API Keys** as the Ollama Base URL. Leaving it unset is fine and is the normal case — JobSync then uses the server default shown on that card. If you have saved one and want to go back to the default, use **Reset to default** on the Ollama card. The connection check on that page only runs by itself when Ollama is your selected provider; the refresh button next to it checks on demand whatever you have selected.
+
 Nothing AI-powered works until a provider *and* a model are both set — resume review, job matching, cover letters and the chat panel all refuse to start rather than silently picking a model for you. If you selected Ollama and the model list is empty, JobSync could not reach the Ollama server; check that it is running and reachable from wherever JobSync is running.
+
+## How do I see how much AI I'm using?
+
+Open **Settings → AI Usage**. It shows the last 7 or 30 days: total tokens, how many AI calls were made, typical response time and time to the first visible word, and how many calls failed — broken down by provider, model and feature (Agent chat, Job match, Automations, Resume review, Cover letter, Resume import), with the last 50 calls at the bottom. A chat message counts as one call; a review, match or cover letter it starts is counted separately under its own feature, and its time is not added to the chat's. Failures are split into provider errors, timeouts, truncated answers and interrupted streams; calls you stopped yourself are shown but never counted as failures. An amber "near context limit" badge on an Ollama model means those calls filled at least 90% of the model's context window, where Ollama silently drops the oldest text. History is kept for 90 days and is not part of the data backup.
 
 ## How do I add my first job?
 
@@ -27,10 +33,27 @@ Click **Jobs** in the sidebar, then the **Add Job** button in the top-right of t
 
 There is a faster route once an AI provider is set: click **Chat AI** in the header, paste the full text of a job posting into the chat, and the assistant extracts the details and shows you exactly what it found before anything is saved. Nothing is written until you approve it.
 
+## How do I add something quickly from the Dashboard?
+
+The card in the top-left of the Dashboard has six buttons — **Add Job**, **Add Automation**, **Add Task**, **Add Question**, **Add Activity** and **Add Contact** — each opening the same form you would reach by navigating to that area yourself.
+
+Five of them take you to the matching page with the form already open, so you land where the new record will appear. **Add Contact** is the exception: it opens the contact form over the Dashboard, and saving leaves you there rather than on **Library → Contacts**.
+
+## How do I read the Daily Goals calendar?
+
+The calendar at the top right of the Dashboard shows one month, with two rings under each day. The outer ring fills as you apply to jobs that day, towards your daily jobs target; the inner ring fills with the hours of finished activities started that day, towards your daily hours target. The key under the calendar shows which ring is which. A day where both targets are met is shown in bold, and hovering over a day, or tapping it, shows the exact numbers. Use the arrows beside the month name to look back up to 11 months; future days stay empty.
+
+Above the calendar, the summary card shows the same month at a glance. The donut gives the share of days each goal was hit: past days of the month, plus today once that goal is met, so an unfinished today never lowers it. Beside it, "Both goals met" counts the days both targets were reached and "Nothing logged" counts past days with no applications and no finished activity. Current streak counts the days in a row, up to today, on which both goals were met; today joins it once both are met, and an unfinished today never breaks it. Best streak (12 mo) is the longest such run in the last 12 months. Both read the same on every month, and a run carries on across months. Both cards' arrows move together.
+
+## How do I change my daily goals?
+
+Click the ⚙ button (Set goals) at the bottom right of the Daily Goals calendar, set **Jobs applied per day** (1–50) and **Activity hours per day** (1–24), and click **Save goals**. The new targets apply to the current month and carry forward into later months until you change them again, so you don't need to set them every month. Earlier months keep the targets they had, so a past day you met stays met. Changing targets partway through a month re-judges that month's earlier days too.
+
 ## What is each area of the sidebar for?
 
-- **Dashboard** — summary cards: application counts, recent jobs and activities, and weekly charts.
+- **Dashboard** — summary cards: application counts, recent jobs and activities, weekly charts, and a quick-add card for the six kinds of record you create most.
 - **Jobs** — every job you are tracking, plus jobs discovered by automations.
+- **Interviews** — every interview round across your jobs in one list, with filters and outcomes.
 - **Automations** — scheduled searches that pull new postings in and score them against your resume.
 - **Tasks** — to-dos with a due date, priority and percent complete, and a timed activity you can start from each one.
 - **Activities** — time you spend on your job hunt, timed with a start/stop timer or logged afterwards, optionally started from a task.
@@ -38,7 +61,7 @@ There is a faster route once an AI provider is set: click **Chat AI** in the hea
 - **Profile** — your resumes, contact information and the profile the AI features read from.
 - **Library** — the shared reference lists behind the dropdowns: Companies, Job Titles, Locations, Sources, Skills and Activity Types.
 
-**Settings is not one of the entries above.** Open the avatar menu at the bottom of the sidebar instead, below the navigation list, and choose **Settings**. It holds AI Provider, API Keys, Appearance, MCP Access and Data (backup, export and import). That same menu also has Support and Logout.
+**Settings is not one of the entries above.** Open the avatar menu at the bottom of the sidebar instead, below the navigation list, and choose **Settings**. It holds AI Provider, AI Usage, API Keys, Appearance, MCP Access and Data (backup, export and import). That same menu also has Support and Logout.
 
 ## Where do I find installation and Docker instructions?
 

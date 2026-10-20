@@ -1,17 +1,28 @@
 "use server";
 import prisma from "@/lib/db";
 import { handleError } from "@/lib/utils";
-import { JOB_TYPES, type JobSort } from "@/models/job.model";
+import {
+  JOB_TYPES,
+  JobFacets,
+  JobListScope,
+  JobSortField,
+} from "@/models/job.model";
+import { normalizeJobFacets } from "@/lib/jobs/jobFacets";
+import type { SortState } from "@/models/sort.model";
+import { findManySorted, planListSort, SortFieldSpec } from "@/lib/listSort";
 import { APP_CONSTANTS } from "@/lib/constants";
 import { requireUser } from "../shared";
-import { hideUnanalyzedScore } from "./shared";
+import { hideUnanalyzedScore, UNANALYZED_MATCH_MARKER } from "./shared";
+import { STAGE_DETAIL_INCLUDE } from "../jobStage/shared";
 
 const JOB_LIST_SELECT = {
   id: true,
+  createdAt: true,
   JobSource: true,
   JobTitle: true,
   jobType: true,
   workplaceType: true,
+  salaryRange: true,
   Company: true,
   Status: true,
   Location: true,
@@ -68,109 +79,108 @@ const JOB_DETAILS_INCLUDE = {
           email: true,
           phone: true,
           linkedinUrl: true,
+          lastContactedAt: true,
           Company: { select: { id: true, label: true } },
         },
       },
     },
     orderBy: { createdAt: "asc" as const },
   },
+  stages: { include: STAGE_DETAIL_INCLUDE },
 };
 
-type JobsListFilters = {
-  filter?: string;
+type JobsListFilters = JobListScope & {
+  facets?: JobFacets;
   search?: string;
-  companyValue?: string;
-  appliedOnly?: boolean;
-  titleValue?: string;
-  locationValue?: string;
-  sourceValue?: string;
+  /** Status counts list Archived too, so they must not drop it by default. */
+  keepArchived?: boolean;
 };
 
 const buildJobsWhereClause = (userId: string, filters: JobsListFilters) => {
   const {
-    filter,
     search,
     companyValue,
     appliedOnly,
     titleValue,
     locationValue,
     sourceValue,
+    keepArchived,
   } = filters;
-
-  // Fit filters read the stored analysis as text. SQLite has no JSON
-  // operators worth the trouble here, and these three shapes are stable:
-  // `"blockers":[]` means nothing stood in the way, `"pct":null` means the
-  // posting never said enough to measure.
-  const FIT_FILTERS: Record<string, object> = {
-    "fit-clear": { fitData: { contains: '"blockers":[]' } },
-    // Not an `AND` array: the dismissed-jobs rule below owns that key and
-    // would overwrite it.
-    "fit-blocked": {
-      fitData: { not: null },
-      NOT: { fitData: { contains: '"blockers":[]' } },
-    },
-    "fit-unmeasured": { fitData: { contains: '"pct":null' } },
-    // Without the right to work in the target country, sponsorship is the whole
-    // question, so it gets a filter of its own rather than a badge to squint at.
-    "fit-visa": { fitData: { contains: '"visaSponsorship":true' } },
-  };
-
-  const filterBy = filter && FIT_FILTERS[filter]
-    ? FIT_FILTERS[filter]
-    : filter
-    ? filter === Object.keys(JOB_TYPES)[1]
-      ? {
-          jobType: filter,
-        }
-      : filter === "accepted" || filter === "dismissed"
-        ? {
-            discoveryStatus: filter,
-          }
-        // Not a status and not a job type: it is answered on the company below.
-        : filter === "hidden"
-        ? {}
-        : {
-            Status: {
-              value: filter,
-            },
-          }
-    : {};
-
-  const whereClause: any = {
-    userId,
-    ...filterBy,
-  };
+  const facets = normalizeJobFacets(filters.facets);
+  const and: Record<string, any>[] = [];
 
   // Dismissed discovered jobs are kept only for dedup and shouldn't
-  // clutter the tracked jobs list unless explicitly filtered for.
-  if (filter !== "dismissed") {
-    whereClause.AND = [
-      {
-        OR: [{ discoveryStatus: null }, { discoveryStatus: { not: "dismissed" } }],
-      },
-    ];
+  // clutter the tracked jobs list unless explicitly included.
+  if (!facets.includeDismissed) {
+    and.push({
+      OR: [{ discoveryStatus: null }, { discoveryStatus: { not: "dismissed" } }],
+    });
   }
+
+  // Accepted (discovered) sits in the Status list, so it ORs with statuses.
+  const statusOr: Record<string, any>[] = [];
+  if (facets.statuses.length) {
+    statusOr.push({ Status: { value: { in: facets.statuses } } });
+  }
+  if (facets.acceptedDiscovered) {
+    statusOr.push({ discoveryStatus: "accepted" });
+  }
+  if (statusOr.length) and.push({ OR: statusOr });
 
   // Passing on a job archives it, and the whole point of passing is that the
   // row leaves the working list. It comes back when the reader asks for it by
   // name, or asks for the applications — a role passed on after applying is
   // still an application. Without this the pass changed the record and nothing
   // else, and the same row was reconsidered every morning.
-  if (!("Status" in whereClause) && !appliedOnly) {
-    whereClause.Status = { value: { not: "archived" } };
+  if (!statusOr.length && !appliedOnly && !keepArchived) {
+    and.push({ Status: { value: { not: "archived" } } });
   }
+
+  if (facets.jobTypes.length) {
+    and.push({ jobType: { in: facets.jobTypes } });
+  }
+  if (facets.workplaces.length) {
+    and.push({ workplaceType: { in: facets.workplaces } });
+  }
+
+  // Fit facets read the stored analysis as text. SQLite has no JSON operators
+  // worth the trouble here, and these shapes are stable: `"blockers":[]` means
+  // nothing stood in the way, `"pct":null` means the posting never said enough
+  // to measure.
+  const fitOr: Record<string, any>[] = [];
+  if (facets.fit.includes("clear")) {
+    fitOr.push({ fitData: { contains: '"blockers":[]' } });
+  }
+  if (facets.fit.includes("blocked")) {
+    fitOr.push({
+      AND: [
+        { fitData: { not: null } },
+        { NOT: { fitData: { contains: '"blockers":[]' } } },
+      ],
+    });
+  }
+  if (facets.fit.includes("unmeasured")) {
+    fitOr.push({ fitData: { contains: '"pct":null' } });
+  }
+  if (fitOr.length) and.push({ OR: fitOr });
+  // Without the right to work in the target country, sponsorship is the whole
+  // question, so it gets a filter of its own rather than a badge to squint at.
+  if (facets.visa) {
+    and.push({ fitData: { contains: '"visaSponsorship":true' } });
+  }
+
+  const whereClause: any = { userId, AND: and };
 
   // A hidden employer is one the person has ruled out wholesale. Its postings
   // keep arriving from the boards, so the list is where the ruling has to hold.
   // Asking for the company by name beats the blanket rule — that is a request,
-  // not a default — and `filter=hidden` is how the list is reviewed and undone.
+  // not a default — and the Hidden employers facet is how the list is reviewed
+  // and undone.
   const companyWhere: Record<string, unknown> = {};
   if (companyValue) companyWhere.value = companyValue;
-  if (filter === "hidden") companyWhere.hidden = true;
+  if (facets.hiddenEmployers) companyWhere.hidden = true;
   else if (!companyValue) companyWhere.hidden = false;
-  if (Object.keys(companyWhere).length > 0) {
-    whereClause.Company = companyWhere;
-  }
+  whereClause.Company = companyWhere;
 
   if (titleValue) {
     whereClause.JobTitle = { value: titleValue };
@@ -213,50 +223,81 @@ const buildJobsWhereClause = (userId: string, filters: JobsListFilters) => {
   return whereClause;
 };
 
-// Multi-column sort: the table sends the columns in the order the user picked
-// them, and Prisma applies an orderBy array in that same order.
-const JOB_SORT_FIELDS = {
-  appliedDate: (dir: "asc" | "desc") => ({ appliedDate: dir }),
-  title: (dir: "asc" | "desc") => ({ JobTitle: { label: dir } }),
-  company: (dir: "asc" | "desc") => ({ Company: { label: dir } }),
-  location: (dir: "asc" | "desc") => ({ Location: { label: dir } }),
-  status: (dir: "asc" | "desc") => ({ Status: { label: dir } }),
-  matchScore: (dir: "asc" | "desc") => ({ matchScore: dir }),
-  // Nulls last in both directions: a job written before the column existed has
-  // no score, and SQLite would otherwise sort that silence to the top on `asc`
-  // — "not measured" read as an answer, the mistake this fork has already paid
-  // for six times.
-  reach: (dir: "asc" | "desc") => ({ reachScore: { sort: dir, nulls: "last" as const } }),
-  source: (dir: "asc" | "desc") => ({ JobSource: { label: dir } }),
-  createdAt: (dir: "asc" | "desc") => ({ createdAt: dir }),
-} as const;
-
-function buildJobsOrderBy(sort?: JobSort[]) {
-  const picked = (sort ?? [])
-    .filter((s) => JOB_SORT_FIELDS[s.field] && (s.dir === "asc" || s.dir === "desc"))
-    .map((s) => JOB_SORT_FIELDS[s.field](s.dir));
-  // createdAt last keeps paging stable when the chosen columns tie.
-  return [...picked, { createdAt: "desc" as const }];
-}
+// Text sorts use the canonical lowercase `value`, so order ignores case.
+const JOB_SORT_SPECS: Record<JobSortField, SortFieldSpec> = {
+  // Unscored rows sort last in both directions: a job written before the
+  // column existed has no score, and "not measured" must not read as an
+  // answer — the mistake this fork has already paid for six times.
+  reach: {
+    orderBy: (dir) => ({ reachScore: dir }),
+    blanks: {
+      hasValue: { reachScore: { not: null } },
+      noValue: { reachScore: null },
+    },
+  },
+  appliedDate: {
+    orderBy: (dir) => ({ appliedDate: dir }),
+    blanks: {
+      hasValue: { appliedDate: { not: null } },
+      noValue: { appliedDate: null },
+    },
+  },
+  title: { orderBy: (dir) => ({ JobTitle: { value: dir } }) },
+  company: { orderBy: (dir) => ({ Company: { value: dir } }) },
+  location: {
+    orderBy: (dir) => ({ Location: { value: dir } }),
+    blanks: {
+      hasValue: { locationId: { not: null } },
+      noValue: { locationId: null },
+    },
+  },
+  source: {
+    orderBy: (dir) => ({ JobSource: { value: dir } }),
+    blanks: {
+      hasValue: { jobSourceId: { not: null } },
+      noValue: { jobSourceId: null },
+    },
+  },
+  // A hidden pre-rank is not a score, so those jobs sort with the unmatched.
+  // The matchData: null branch keeps a scored row with no matchData visible.
+  matchScore: {
+    orderBy: (dir) => ({ matchScore: dir }),
+    blanks: {
+      hasValue: {
+        matchScore: { not: null },
+        OR: [
+          { matchData: null },
+          { NOT: { matchData: { contains: UNANALYZED_MATCH_MARKER } } },
+        ],
+      },
+      noValue: {
+        OR: [
+          { matchScore: null },
+          { matchData: { contains: UNANALYZED_MATCH_MARKER } },
+        ],
+      },
+    },
+  },
+};
 
 export const getJobsList = async (
   page: number = 1,
   limit: number = APP_CONSTANTS.RECORDS_PER_PAGE,
-  filter?: string,
+  facets?: JobFacets,
   search?: string,
   companyValue?: string,
   appliedOnly?: boolean,
   titleValue?: string,
   locationValue?: string,
   sourceValue?: string,
-  sort?: JobSort[],
+  sort?: SortState,
 ): Promise<any | undefined> => {
   try {
     const user = await requireUser();
     const skip = (page - 1) * limit;
 
     const whereClause = buildJobsWhereClause(user.id, {
-      filter,
+      facets,
       search,
       companyValue,
       appliedOnly,
@@ -265,24 +306,59 @@ export const getJobsList = async (
       sourceValue,
     });
 
-    const [data, total] = await Promise.all([
-      prisma.job.findMany({
-        where: whereClause,
-        skip,
-        take: limit,
-        select: JOB_LIST_SELECT,
-        orderBy: buildJobsOrderBy(sort),
-      }),
-      prisma.job.count({
-        where: whereClause,
-      }),
-    ]);
+    const { data, total } = await findManySorted(
+      prisma.job,
+      { where: whereClause, skip, take: limit, select: JOB_LIST_SELECT },
+      planListSort(sort, JOB_SORT_SPECS, [{ createdAt: "desc" }]),
+    );
     return { success: true, data: data.map(hideUnanalyzedScore), total };
   } catch (error) {
     const msg = "Failed to fetch jobs list. ";
     return handleError(error, msg);
   }
 };
+
+export const getJobFilterCounts = async (
+  facets: JobFacets,
+  search?: string,
+  scope: JobListScope = {},
+): Promise<any | undefined> => {
+  try {
+    const user = await requireUser();
+    const applied = normalizeJobFacets(facets);
+    // Status counts ignore the Status section itself, so ticking one status
+    // never zeroes the others.
+    const statusFree = { ...applied, statuses: [], acceptedDiscovered: false };
+    const where = buildJobsWhereClause(user.id, { ...scope, search, facets: applied });
+    const statusFreeWhere = buildJobsWhereClause(user.id, {
+      ...scope,
+      search,
+      facets: statusFree,
+      keepArchived: true,
+    });
+
+    const [total, grouped, acceptedDiscovered] = await Promise.all([
+      prisma.job.count({ where }),
+      prisma.job.groupBy({
+        by: ["statusId"],
+        where: statusFreeWhere,
+        _count: { _all: true },
+      }),
+      prisma.job.count({
+        where: { AND: [statusFreeWhere, { discoveryStatus: "accepted" }] },
+      }),
+    ]);
+
+    const statusCounts = Object.fromEntries(
+      grouped.map((row) => [row.statusId, row._count._all]),
+    );
+    return { success: true, data: { total, statusCounts, acceptedDiscovered } };
+  } catch (error) {
+    const msg = "Failed to count jobs. ";
+    return handleError(error, msg);
+  }
+};
+
 
 export async function* getJobsIterator(filter?: string, pageSize = 200) {
   const user = await requireUser();

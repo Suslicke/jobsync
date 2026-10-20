@@ -8,6 +8,7 @@ import {
   Wrench,
   Zap,
   BookOpen,
+  CalendarCheck,
 } from "lucide-react";
 
 export const APP_CONSTANTS = {
@@ -23,6 +24,8 @@ export const APP_CONSTANTS = {
   MAX_AUTOMATIONS_PER_USER: 24,
   AUTOMATIONS_PER_HOUR_MAX: 4,
   MAX_JOB_TAGS: 10,
+  // Due date given to a new job when none is supplied, on every creation path
+  DEFAULT_JOB_DUE_DAYS: 3,
   MIN_QUESTION_LENGTH: 5,
   MAX_QUESTION_LENGTH: 500,
   MIN_QUESTION_ANSWER_LENGTH: 10,
@@ -30,6 +33,7 @@ export const APP_CONSTANTS = {
   MAX_SKILL_CATEGORIES: 8,
   MAX_SKILLS_PER_CATEGORY: 20,
   MIN_RESUME_SECTIONS_FOR_SELECTION: 2,
+  RESUME_PICKER_LIMIT: 100,
   ACTIVITY_MAX_DURATION_MINUTES: 8 * 60, // 8 Hours
   ACTIVITY_MAX_DURATION_MS: 8 * 60 * 60 * 1000, // 8 hours in milliseconds
   ACTIVITY_MIN_DURATION_MINUTES: 2, // activities shorter than this are discarded
@@ -61,8 +65,12 @@ export const APP_CONSTANTS = {
   // Paired so the rail width and its matching content offset can't drift.
   SIDEBAR_WIDTH: {
     expanded: { rail: "w-56", contentOffset: "sm:pl-56" },
-    collapsed: { rail: "w-14", contentOffset: "sm:pl-14" },
+    collapsed: { rail: "w-14", contentOffset: "sm:pl-14", px: 56 },
   },
+
+  // Cloud API-key verification timeout. Without it a black-holed TLS
+  // handshake (VPN MTU mismatch) leaves the Verify button spinning forever.
+  AI_VERIFY_TIMEOUT_MS: 10_000,
 
   // Ollama API timeouts
   AI_OLLAMA_LIST_TIMEOUT_MS: 5_000,
@@ -262,7 +270,7 @@ export const APP_CONSTANTS = {
   MCP_TOKEN_EXPIRY_PRESETS: [30, 90, 365] as const,
   MCP_TOKEN_EXPIRY_DEFAULT_DAYS: 90,
   MCP_TOKEN_MAX_PER_USER: 10,
-  MCP_RATE_LIMIT_MAX: 60,
+  MCP_RATE_LIMIT_MAX: 100,
   // Scope that unlocks every server action over MCP (see lib/mcp/actions).
   MCP_FULL_SCOPE: "full",
   MCP_FULL_TOKEN_MAX_DAYS: 30,
@@ -393,6 +401,7 @@ export const SCHEDULER_CONSTANTS = {
   // and hourly because taste weights move with every decision the user records
   // and freshness decays on its own.
   REACH_CRON_EXPRESSION: "17 * * * *",
+  PRUNE_CRON_EXPRESSION: "0 3 * * *", // Daily at 03:00; reads filter anyway
   // How long a run may go without a heartbeat before the reaper calls it dead.
   // Measured from AutomationRun.lastProgressAt, NOT from startedAt: a LinkedIn
   // sweep legitimately fetches for longer than this, and reaping it flipped a
@@ -429,6 +438,17 @@ export const CONTACT_ROLES = [
   { label: "Reference", value: "reference" },
 ] as const;
 
+export const COMPANY_SIZES = [
+  "1-10",
+  "11-50",
+  "51-200",
+  "201-1000",
+  "1001-5000",
+  "5000+",
+] as const;
+
+export const COMPANY_NOTES_MAX_LENGTH = 5000;
+
 export const JOB_STATUSES = [
   { label: "New", value: "new" },
   { label: "Draft", value: "draft" },
@@ -440,7 +460,54 @@ export const JOB_STATUSES = [
   { label: "Rejected", value: "rejected" },
   { label: "Expired", value: "expired" },
   { label: "Archived", value: "archived" },
+  { label: "Withdrawn", value: "withdrawn" },
 ] as const;
+
+// Seeded per user at signup and backfilled by the stages migration. `value`
+// must equal canonicalizeEntityValue(label): the status -> stage-type reverse
+// lookup keys on the status LABEL's canonical form, not on status.value, so
+// "Offer Accepted" cannot mint a second type beside "offer-accepted".
+export const JOB_STAGES = [
+  { label: "New", value: "new", status: "new", sortOrder: 0 },
+  { label: "Draft", value: "draft", status: "draft", sortOrder: 1 },
+  { label: "Applied", value: "applied", status: "applied", sortOrder: 2 },
+  { label: "Interview", value: "interview", status: "interview", sortOrder: 3 },
+  { label: "1st Screening Interview", value: "1st screening interview", status: "interview", sortOrder: 4 },
+  { label: "2nd Technical Interview", value: "2nd technical interview", status: "interview", sortOrder: 5 },
+  { label: "Final / Onsite Interview", value: "final / onsite interview", status: "interview", sortOrder: 6 },
+  { label: "Offer", value: "offer", status: "offer", sortOrder: 7 },
+  { label: "Offer Accepted", value: "offer accepted", status: "offer-accepted", sortOrder: 8 },
+  { label: "Offer Declined", value: "offer declined", status: "offer-declined", sortOrder: 9 },
+  { label: "Rejected", value: "rejected", status: "rejected", sortOrder: 10 },
+  { label: "Expired", value: "expired", status: "expired", sortOrder: 11 },
+  { label: "Archived", value: "archived", status: "archived", sortOrder: 12 },
+  { label: "Withdrawn", value: "withdrawn", status: "withdrawn", sortOrder: 13 },
+] as const;
+
+// Statuses whose stage types render greyed at the foot of the Stage History
+// list when the job has not reached them (D6). Offer alone: it reads as what a
+// job is working toward, and rejected/withdrawn are alternative endings, not
+// next steps. Both stay one click away in Add Stage.
+export const TERMINAL_STAGE_STATUSES = ["offer"] as const;
+
+// The fixed outcome set a stage may carry (spec's JobStage.outcome).
+export const STAGE_OUTCOMES = [
+  { label: "Scheduled", value: "scheduled" },
+  { label: "Completed", value: "completed" },
+  { label: "Passed", value: "passed" },
+  { label: "Failed", value: "failed" },
+  { label: "No-show", value: "no-show" },
+  { label: "Cancelled", value: "cancelled" },
+] as const;
+
+// Statuses you can only reach by applying: setting one marks the job applied.
+export const APPLIED_STATUS_VALUES: readonly string[] = [
+  "applied",
+  "interview",
+  "offer",
+  "offer-accepted",
+  "offer-declined",
+];
 
 // Zod's z.enum needs a non-empty tuple; JOB_STATUSES is the source of truth.
 export const JOB_STATUS_VALUES = JOB_STATUSES.map((s) => s.value) as unknown as [
@@ -464,6 +531,11 @@ export const SIDEBAR_LINKS = [
     icon: BriefcaseBusiness,
     route: "/dashboard/myjobs",
     label: "Jobs",
+  },
+  {
+    icon: CalendarCheck,
+    route: "/dashboard/interviews",
+    label: "Interviews",
   },
   {
     icon: Zap,
@@ -502,3 +574,29 @@ export const SIDEBAR_LINKS = [
     devOnly: true,
   },
 ];
+
+export const NOTIFICATION_CONSTANTS = {
+  RETENTION_DAYS: 30,
+  POPOVER_LIMIT: 20,
+  PAGE_SIZE: 50,
+} as const;
+
+export const AI_USAGE_CONSTANTS = {
+  RETENTION_DAYS: 90,
+  RECENT_LIMIT: 50,
+  // Ollama drops the oldest context silently on overflow, so "near" is the
+  // only warning available.
+  CONTEXT_WARN_RATIO: 0.9,
+} as const;
+
+// Hard-coded until goals become a user setting
+export const DAILY_GOALS = {
+  JOBS_TARGET: 5,
+  HOURS_TARGET: 4,
+  JOBS_MIN: 1,
+  JOBS_MAX: 50,
+  HOURS_MIN: 1,
+  HOURS_MAX: 24,
+  // Months browsable before the current one
+  MONTHS_BACK: 11,
+} as const;

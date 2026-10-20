@@ -15,10 +15,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
     await expect(
       page.getByPlaceholder("Copy and paste job link here"),
     ).toHaveValue("www.google.com");
@@ -54,10 +53,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Delete Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Delete" }).click();
     await page.getByRole("button", { name: "Delete" }).click();
 
     await expect(page.getByRole("row", { name: jobText })).not.toBeVisible();
@@ -70,10 +68,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
     await expect(
       page.getByPlaceholder("Copy and paste job link here"),
     ).toHaveValue("");
@@ -86,18 +83,17 @@ test.describe("Add New Job", () => {
     const jobText = uniqueName("developer test title applied");
     await createNewJob(page, jobText, cleanup, {
       beforeSave: async (page) => {
-        await page.getByRole("switch").click();
+        await page.getByLabel("Select Job Status").click();
+        await page.getByRole("option", { name: "Applied", exact: true }).click();
       },
     });
     await expect(page.getByRole("row", { name: jobText }).first()).toBeVisible();
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
-    await expect(page.getByRole("switch")).toBeChecked();
     await expect(page.getByLabel("Select Job Status")).toContainText("Applied");
     await expect(page.getByLabel("Date Applied")).toContainText(
       format(new Date(), "PP"),
@@ -126,10 +122,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
     await expect(page.getByLabel("Salary Range")).toContainText(salary);
   });
 
@@ -147,10 +142,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
     await expect(page.getByRole("radio", { name: "Remote" })).toBeChecked();
   });
 
@@ -171,10 +165,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
     await expect(page.getByLabel("Due Date")).toContainText(expectedDueDate);
   });
 
@@ -188,10 +181,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
     await expect(page.getByTestId("add-job-dialog-title")).toBeVisible();
 
     await page.getByRole("button", { name: "New Note" }).click();
@@ -210,7 +202,7 @@ test.describe("Add New Job", () => {
     page,
   }) => {
     // No cleanup needed: submission fails validation, so nothing is created.
-    await page.getByRole("button", { name: "Job", exact: true }).click();
+    await page.getByRole("button", { name: "Add Job", exact: true }).click();
     await expect(page.getByTestId("add-job-dialog-title")).toBeVisible();
 
     await page.getByTestId("save-job-btn").click();
@@ -297,12 +289,17 @@ test.describe("Add New Job", () => {
     await createNewJob(page, jobText, cleanup);
     await expect(page.getByRole("row", { name: jobText }).first()).toBeVisible();
 
-    await page.getByTestId("job-filter-select").click();
-    await page.getByRole("option", { name: "Rejected", exact: true }).click();
+    await page.getByTestId("job-filter-button").click();
+    await page.getByRole("checkbox", { name: "Rejected", exact: true }).check();
+    await page.getByRole("button", { name: /^Show (\d+ )?jobs?$/ }).click();
+    await expect(page).toHaveURL(/status=rejected/);
     await expect(page.getByRole("row", { name: jobText })).not.toBeVisible();
 
-    await page.getByTestId("job-filter-select").click();
-    await page.getByRole("option", { name: "Draft", exact: true }).click();
+    await page.getByTestId("job-filter-button").click();
+    await page.getByRole("checkbox", { name: "Rejected", exact: true }).uncheck();
+    await page.getByRole("checkbox", { name: "Draft", exact: true }).check();
+    await page.getByRole("button", { name: /^Show (\d+ )?jobs?$/ }).click();
+    await expect(page).toHaveURL(/status=draft/);
     await expect(page.getByRole("row", { name: jobText }).first()).toBeVisible();
   });
 
@@ -336,10 +333,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
     await expect(page.getByLabel("Job Title")).toContainText(jobText);
     await expect(page.getByLabel("Company")).toContainText(`company ${suffix}`);
     await expect(page.getByLabel("Job Location")).toContainText(
@@ -379,7 +375,7 @@ test.describe("Add New Job", () => {
     page,
   }) => {
     // No cleanup needed: nothing should be created by this test.
-    await page.getByRole("button", { name: "Job", exact: true }).click();
+    await page.getByRole("button", { name: "Add Job", exact: true }).click();
     await expect(page.getByTestId("add-job-dialog-title")).toBeVisible();
 
     await page.getByLabel("Job Title").click();
@@ -418,10 +414,9 @@ test.describe("Add New Job", () => {
 
     await page
       .getByRole("row", { name: jobText })
-      .getByTestId("job-actions-menu-btn")
+      .getByRole("button", { name: "Edit Job" })
       .first()
       .click();
-    await page.getByRole("menuitem", { name: "Edit Job" }).click();
     await expect(page.getByTestId("add-job-dialog-title")).toBeVisible();
     await expect(page.getByText(tagText, { exact: true })).toBeVisible();
   });

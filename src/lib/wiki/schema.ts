@@ -13,6 +13,8 @@ export const WIKI_TYPES = [
 export const WIKI_FEATURES = [
   "setup",
   "jobs",
+  "timeline",
+  "interviews",
   "contacts",
   "companies",
   "automations",
@@ -22,6 +24,7 @@ export const WIKI_FEATURES = [
   "activities",
   "questions",
   "mcp",
+  "backup",
 ] as const;
 
 export const WIKI_STATUSES = ["draft", "stable", "deprecated"] as const;

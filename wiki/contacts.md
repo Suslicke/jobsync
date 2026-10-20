@@ -19,7 +19,7 @@ Contacts live under **Library → Contacts**, and a contact can be linked to any
 
 ## How do I add a contact?
 
-Open **Library** in the sidebar, go to the **Contacts** tab and click **New Contact**. Only **Name** is required — everything else can be filled in later by editing the contact, and a name-and-email row is a perfectly useful record on day one.
+Open **Library** in the sidebar, go to the **Contacts** tab and click **New Contact**. **Add Contact** on the Dashboard opens the same form without leaving the Dashboard. Only **Name** is required — everything else can be filled in later by editing the contact, and a name-and-email row is a perfectly useful record on day one.
 
 Company, Location, Role and *Worked together at* are combo boxes: they pick an existing entry or create a new one from what you type, so you never have to set up a company before adding the person who works there. Company is where the person works now; Role is the role they usually play for you, and it is what the role filter matches when the person is not yet on any job.
 
@@ -30,6 +30,8 @@ Click a contact's row to expand it — the expanded row shows their email, phone
 Open the job, go to its **Contacts** tab and click **Add Contact**. Pick the person and the role they played on *this* job, and save — the role is per link, so the same person can be the referrer on one job and the interviewer on another.
 
 If the person is not in your contacts yet, the same tab's **New Contact** opens the full contact dialog with whatever you typed already in the Name field, so you can create the person and link them in one pass.
+
+Each linked contact shows their title, company, role, contact details and, when the person has one set, the date you last contacted them.
 
 The trash icon beside a linked contact unlinks them from that job only. The contact itself, and every other job they are linked to, is left alone.
 

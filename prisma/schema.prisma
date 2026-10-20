@@ -25,6 +25,7 @@ model User {
   JobSource      JobSource[]
   Contact        Contact[]
   ContactRole    ContactRole[]
+  JobStageType   JobStageType[]
   Profile        Profile[]
   Activity       Activity[]
   ActivityType   ActivityType[]
@@ -36,6 +37,8 @@ model User {
   Tag            Tag[]
   Question       Question[]
   McpAccessToken McpAccessToken[]
+  Notification   Notification[]
+  aiCalls        AiCall[]
   ChatConversation ChatConversation?
   defaultResumeId String?
   defaultResume   Resume?          @relation("UserDefaultResume", fields: [defaultResumeId], references: [id], onDelete: SetNull)
@@ -241,10 +244,8 @@ model Contact {
   createdBy         String // userId
   user              User       @relation(fields: [createdBy], references: [id])
 
-  Interview         Interview? @relation(fields: [interviewId], references: [id])
-  interviewId       String?
-
   jobLinks          JobContact[]
+  stageLinks        JobStageInterviewer[]
 
   @@index([createdBy])
   @@index([companyId])
@@ -295,6 +296,7 @@ model JobStatus {
   label String
   value String @unique
   jobs  Job[]
+  stageTypes JobStageType[]
 }
 
 model Location {
@@ -344,6 +346,9 @@ model Company {
   websiteUrl      String?
   careersUrl      String?
   industry        String?
+  linkedinUrl     String?
+  size            String?
+  notes           String?
 
   @@unique([value, createdBy])
   @@unique([createdBy, atsProvider, atsToken])
@@ -361,12 +366,77 @@ model JobSource {
   @@unique([value, createdBy])
 }
 
-model Interview {
-  id           String    @id @default(uuid())
-  createdAt    DateTime
-  jobId        String
-  job          Job?      @relation(fields: [jobId], references: [id])
-  interviewers Contact[]
+// The kind of stage. Mirrors ContactRole in ownership and resolution, and
+// JobSource in being user-extensible. statusId is both the derived-status
+// source and the interview-kind discriminator (spec decisions 3 and 10).
+model JobStageType {
+  id        String     @id @default(uuid())
+  label     String
+  value     String
+  statusId  String
+  Status    JobStatus  @relation(fields: [statusId], references: [id])
+  sortOrder Int        @default(0)
+  createdBy String // userId
+  user      User       @relation(fields: [createdBy], references: [id])
+  stages    JobStage[]
+
+  @@unique([value, createdBy])
+  @@index([createdBy])
+}
+
+// One entry in a job's timeline. No ownership column: a stage has no meaning
+// apart from its job, so ownership traverses Job: { userId }.
+model JobStage {
+  id            String                 @id @default(uuid())
+  jobId         String
+  Job           Job                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stageTypeId   String
+  StageType     JobStageType           @relation(fields: [stageTypeId], references: [id])
+  occurredAt    DateTime?
+  isCurrent     Boolean                @default(false)
+  outcome       String?
+  notes         String?
+  durationMins  Int?
+  format        String?
+  location      String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  interviewers  JobStageInterviewer[]
+  prepQuestions JobStagePrepQuestion[]
+
+  @@index([jobId])
+  @@index([stageTypeId])
+  // Also has a hand-written partial unique index (not expressible here):
+  // UNIQUE(jobId) WHERE isCurrent = 1
+  // See migrations/20260919000000_job_stages_timeline
+}
+
+model JobStageInterviewer {
+  id        String   @id @default(uuid())
+  stageId   String
+  Stage     JobStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  contactId String
+  Contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([stageId, contactId])
+  @@index([contactId])
+}
+
+// questionId is deliberately NOT cascading: erasing the record that a question
+// was asked in a real interview is worse than a delete that fails loudly.
+model JobStagePrepQuestion {
+  id         String    @id @default(uuid())
+  stageId    String
+  Stage      JobStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  questionId String
+  Question   Question  @relation(fields: [questionId], references: [id])
+  asked      Boolean   @default(false)
+  askedAt    DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([stageId, questionId])
+  @@index([questionId])
 }
 
 model Job {
@@ -396,7 +466,6 @@ model Job {
   salaryRange String?
   Location    Location?   @relation(fields: [locationId], references: [id])
   locationId  String?
-  Interview   Interview[]
   Resume        Resume?      @relation(fields: [resumeId], references: [id])
   resumeId      String?
   CoverLetter   CoverLetter? @relation(fields: [coverLetterId], references: [id])
@@ -405,6 +474,7 @@ model Job {
   Feedback      JobFeedback[]
   tags        Tag[]
   contactLinks  JobContact[]
+  stages        JobStage[]
 
   // Automation discovery fields
   automationId    String?
@@ -552,6 +622,7 @@ model Automation {
 
   runs           AutomationRun[]
   discoveredJobs Job[]
+  notifications  Notification[]
 
   @@index([userId])
   @@index([status, nextRunAt])
@@ -588,6 +659,47 @@ model AutomationRun {
   // Also has a hand-written partial unique index (not expressible here):
   // UNIQUE(automationId) WHERE status IN ('running', 'cancelling')
   // See migrations/20260710000001_automation_run_single_active
+}
+
+model Notification {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  automationId String
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  runId        String? // last run that produced/refreshed it; plain id, no FK
+
+  kind        String // "run" | "error" | "board"
+  boardToken  String? // set only for kind "board"; the D2 refresh key
+  payload     String // JSON, shape per kind in notification.model.ts
+  occurrences Int     @default(1)
+
+  occurredAt  DateTime  @default(now())
+  readAt      DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, occurredAt])
+  @@index([userId, readAt])
+  @@index([automationId, kind, boardToken])
+}
+
+model AiCall {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  feature      String // AiUsageFeature in aiUsage.model.ts
+  provider     String
+  model        String
+  status       String // AiCallStatus in aiUsage.model.ts
+  inputTokens  Int?
+  outputTokens Int?
+  durationMs   Int
+  firstTokenMs Int?
+  numCtx       Int? // Ollama only, and only where the app passes num_ctx
+  startedAt    DateTime @default(now())
+
+  @@index([userId, startedAt])
 }
 
 model Note {
@@ -638,6 +750,7 @@ model Question {
   createdBy  String
   user       User     @relation(fields: [createdBy], references: [id])
   tags       Tag[]
+  prepLinks  JobStagePrepQuestion[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   createdVia String? // MCP provenance: which agent/token created this, mirrors Job.createdVia

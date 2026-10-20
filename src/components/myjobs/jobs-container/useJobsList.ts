@@ -2,7 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getJobsList } from "@/actions/job.actions";
 import { toastError } from "@/lib/toast";
-import { JobResponse, JobsViewMode, type JobSort, type JobSortField } from "@/models/job.model";
+import {
+  JobFacets,
+  JobResponse,
+  JobSortField,
+  JobsViewMode,
+} from "@/models/job.model";
+import { hasJobFacets } from "@/lib/jobs/jobFacets";
+import type { SortState } from "@/models/sort.model";
 import { APP_CONSTANTS } from "@/lib/constants";
 import {
   getFromLocalStorage,
@@ -18,25 +25,33 @@ export function useJobsList({
   titleFilter,
   locationFilter,
   sourceFilter,
+  facets,
+  sort,
 }: {
   companyFilter: string | null;
   appliedFilter: boolean;
   titleFilter: string | null;
   locationFilter: string | null;
   sourceFilter: string | null;
+  facets: JobFacets;
+  sort: SortState<JobSortField> | null;
 }) {
   const { jobWrites } = useAgentChat();
   const [jobs, setJobs] = useState<JobResponse[]>([]);
   const [viewMode, setViewMode] = useState<JobsViewMode>("table");
   const [page, setPage] = useState(1);
   const [totalJobs, setTotalJobs] = useState(0);
-  const [filterKey, setFilterKey] = useState<string>("none");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sort, setSort] = useState<JobSort[]>([]);
   const [initialLoading, setInitialLoading] = useState(false);
+  // False until page 1 has loaded, so an empty list isn't read as "no matches"
+  // before the first fetch or after a failed one.
+  const [listLoaded, setListLoaded] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const hasSearched = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const requestSeq = useRef(0);
+  const sortRef = useRef(sort);
+  const lastSort = useRef(sort);
 
   // Read after mount: localStorage is unavailable during SSR, so seeding the
   // initial state from it would cause a hydration mismatch.
@@ -46,8 +61,6 @@ export function useJobsList({
       null,
     );
     if (saved === "cards" || saved === "table") setViewMode(saved);
-    const savedSort = getFromLocalStorage(APP_CONSTANTS.JOBS_SORT_STORAGE_KEY, null);
-    if (Array.isArray(savedSort)) setSort(savedSort as JobSort[]);
   }, []);
 
   const onChangeViewMode = (mode: JobsViewMode) => {
@@ -55,75 +68,60 @@ export function useJobsList({
     saveToLocalStorage(APP_CONSTANTS.JOBS_VIEW_MODE_STORAGE_KEY, mode);
   };
 
-  // Click a column to sort by it alone; shift-click adds it as a tie-breaker
-  // after the columns already chosen. Cycle per column: desc -> asc -> off.
-  const toggleSort = (field: JobSortField, additive = false) => {
-    setSort((prev) => {
-      const current = prev.find((s) => s.field === field);
-      const nextDir = !current ? "desc" : current.dir === "desc" ? "asc" : null;
-      let next: JobSort[];
-      if (!additive) {
-        next = nextDir ? [{ field, dir: nextDir }] : [];
-      } else if (!current) {
-        next = [...prev, { field, dir: "desc" }];
-      } else if (nextDir) {
-        next = prev.map((s) => (s.field === field ? { field, dir: nextDir } : s));
-      } else {
-        next = prev.filter((s) => s.field !== field);
-      }
-      saveToLocalStorage(APP_CONSTANTS.JOBS_SORT_STORAGE_KEY, next);
-      return next;
-    });
-  };
-
   const jobsPerPage = APP_CONSTANTS.RECORDS_PER_PAGE;
 
   const loadJobs = useCallback(
-    async (page: number, filter?: string, search?: string) => {
+    async (page: number, search?: string) => {
+      // Only the newest request may write: a slower response to an older
+      // sort, search or page must not replace or extend the newer list.
+      const request = ++requestSeq.current;
       if (page === 1) setInitialLoading(true);
       else setLoadingMore(true);
       const { success, data, total, message } = await getJobsList(
         page,
         jobsPerPage,
-        filter && filter !== "none" ? filter : undefined,
+        hasJobFacets(facets) ? facets : undefined,
         search,
         companyFilter || undefined,
         appliedFilter || undefined,
         titleFilter || undefined,
         locationFilter || undefined,
         sourceFilter || undefined,
-        sort,
+        sortRef.current ?? undefined,
       );
+      if (request !== requestSeq.current) return;
       if (success && data) {
         setJobs((prev) => (page === 1 ? data : [...prev, ...data]));
         setTotalJobs(total);
         setPage(page);
+        setListLoaded(true);
       } else {
         toastError(message);
+        if (page === 1) setListLoaded(false);
       }
       setInitialLoading(false);
       setLoadingMore(false);
     },
     [
       jobsPerPage,
+      facets,
       companyFilter,
       appliedFilter,
       titleFilter,
       locationFilter,
       sourceFilter,
-      sort,
     ],
   );
 
   const reloadJobs = useCallback(async () => {
-    await loadJobs(1, undefined, searchTerm || undefined);
-    if (filterKey !== "none") {
-      setFilterKey("none");
-    }
-  }, [loadJobs, filterKey, searchTerm]);
+    await loadJobs(1, searchTerm || undefined);
+  }, [loadJobs, searchTerm]);
 
   useEffect(() => {
-    (async () => await loadJobs(1))();
+    (async () => await loadJobs(1, searchTerm || undefined))();
+    // Search has its own debounced effect below; keying on it here too
+    // would fire a second, undebounced request per keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadJobs]);
 
   // The agent saves server-side, so only this counter tells us a row appeared
@@ -143,11 +141,22 @@ export function useJobsList({
     if (searchTerm === "" && !hasSearched.current) return;
 
     const timer = setTimeout(() => {
-      loadJobs(1, filterKey, searchTerm || undefined);
+      loadJobs(1, searchTerm || undefined);
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
+
+  // Reload page 1 on a real sort change, keeping the filter and search. The
+  // equality check skips mount (and StrictMode's re-run) — the mount effect
+  // already loads.
+  useEffect(() => {
+    sortRef.current = sort;
+    if (lastSort.current === sort) return;
+    lastSort.current = sort;
+    loadJobs(1, searchTerm || undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort]);
 
   // Infinite scroll: auto-load next page when sentinel is visible
   useEffect(() => {
@@ -162,7 +171,7 @@ export function useJobsList({
           !loadingMore &&
           jobs.length < totalJobs
         ) {
-          loadJobs(page + 1, filterKey, searchTerm || undefined);
+          loadJobs(page + 1, searchTerm || undefined);
         }
       },
       { threshold: APP_CONSTANTS.INTERSECTION_OBSERVER_THRESHOLD },
@@ -174,17 +183,11 @@ export function useJobsList({
     jobs.length,
     totalJobs,
     page,
-    filterKey,
     searchTerm,
     initialLoading,
     loadingMore,
     loadJobs,
   ]);
-
-  const onFilterChange = (filterBy: string) => {
-    setFilterKey(filterBy);
-    loadJobs(1, filterBy, searchTerm || undefined);
-  };
 
   return {
     jobs,
@@ -192,16 +195,13 @@ export function useJobsList({
     onChangeViewMode,
     page,
     totalJobs,
-    filterKey,
     searchTerm,
     setSearchTerm,
     initialLoading,
+    listLoaded,
     loadingMore,
     loadJobs,
     reloadJobs,
-    onFilterChange,
     sentinelRef,
-    sort,
-    toggleSort,
   };
 }

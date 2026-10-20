@@ -5,9 +5,19 @@ import { runAutomation, AutomationAlreadyRunningError } from "@/lib/scraper";
 import { ATS_BOARDS, type JobBoard } from "@/models/automation.model";
 import { log } from "@/lib/telemetry";
 import { refreshStaleReach } from "@/lib/fit/store";
+import { pruneNotifications } from "@/lib/notifications/prune";
+import { pruneAiCalls } from "@/lib/aiUsage/prune";
 
 let scheduledTask: ScheduledTask | null = null;
+let pruneTask: ScheduledTask | null = null;
 let reachTask: ScheduledTask | null = null;
+
+// Both prunes log and swallow their own errors.
+async function runPrunes() {
+  const now = new Date();
+  await pruneNotifications(now);
+  await pruneAiCalls(now);
+}
 
 async function runDueAutomations() {
   const now = new Date();
@@ -148,6 +158,11 @@ export function startScheduler() {
   scheduledTask = cron.schedule(cronExpression, runDueAutomations, {
     timezone: process.env.TZ || "UTC",
   });
+  pruneTask = cron.schedule(
+    SCHEDULER_CONSTANTS.PRUNE_CRON_EXPRESSION,
+    runPrunes,
+    { timezone: process.env.TZ || "UTC" },
+  );
 
   log.info("[Scheduler] Started successfully");
 }
@@ -156,6 +171,8 @@ export function stopScheduler() {
   if (scheduledTask) {
     scheduledTask.stop();
     scheduledTask = null;
+    pruneTask?.stop();
+    pruneTask = null;
     log.info("[Scheduler] Stopped");
   }
 }

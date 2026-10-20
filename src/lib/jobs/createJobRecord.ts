@@ -1,5 +1,38 @@
 import prisma from "@/lib/db";
 import { buildFitData, buildInitialReach } from "@/lib/fit/store";
+import { resolveStageTypeForStatusId } from "@/lib/jobs/resolve";
+import { jobFieldsForStage } from "@/actions/jobStage/shared";
+
+type StageClient = {
+  jobStage: { create: (args: any) => Promise<any> };
+};
+
+// The nested payload that writes the job and its first stage as one statement,
+// so a job can never commit without its timeline. The stage type is resolved
+// BEFORE the create on purpose: a nested create is an implicit transaction,
+// and the resolver writes through the base client (D4).
+export async function firstStageCreate(
+  statusId: string,
+  userId: string,
+  occurredAt: Date,
+) {
+  const stageTypeId = await resolveStageTypeForStatusId(statusId, userId);
+  return { create: { stageTypeId, occurredAt, isCurrent: true } };
+}
+
+// The separate-statement form, still used by the dev-only mock generator.
+export async function createFirstStage(
+  client: StageClient,
+  jobId: string,
+  statusId: string,
+  userId: string,
+  occurredAt: Date,
+): Promise<void> {
+  const stageTypeId = await resolveStageTypeForStatusId(statusId, userId);
+  await client.jobStage.create({
+    data: { jobId, stageTypeId, occurredAt, isCurrent: true },
+  });
+}
 
 export async function createJobRecord(fields: {
   jobTitleId: string;
@@ -54,13 +87,26 @@ export async function createJobRecord(fields: {
     location: locationLabel,
   });
   const reach = await buildInitialReach(rest.userId, { fitData, title: label });
-  return prisma.job.create({
+  const createdAt = new Date();
+  const stages = await firstStageCreate(fields.statusId, fields.userId, createdAt);
+  const status = await prisma.jobStatus.findUnique({
+    where: { id: fields.statusId },
+    select: { value: true },
+  });
+  return await prisma.job.create({
     data: {
       ...rest,
       fitData,
       ...reach,
-      createdAt: new Date(),
+      ...jobFieldsForStage(
+        status?.value ?? "",
+        fields.statusId,
+        null,
+        fields.appliedDate ?? null,
+      ),
+      createdAt,
       ...(tagIds.length > 0 ? { tags: { connect: tagIds.map((id) => ({ id })) } } : {}),
+      stages,
     },
   });
 }

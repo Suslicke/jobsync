@@ -20,7 +20,10 @@ vi.mock("@prisma/client", () => {
     location: { findUnique: vi.fn(), create: vi.fn() },
     company: { findUnique: vi.fn(), create: vi.fn() },
     jobSource: { findUnique: vi.fn(), create: vi.fn() },
-    jobStatus: { findFirst: vi.fn(), create: vi.fn() },
+    jobStatus: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
+    // A saved job gets its first timeline stage here too (createFirstStage).
+    jobStageType: { findUnique: vi.fn(), aggregate: vi.fn(), create: vi.fn() },
+    jobStage: { create: vi.fn() },
   };
   return {
     PrismaClient: vi.fn(function () {
@@ -44,6 +47,10 @@ vi.mock("@/lib/ai/provider-registry.server", () => ({
 }));
 
 vi.mock("ai", () => ({ generateText: vi.fn() }));
+
+vi.mock("@/lib/notifications/record", () => ({
+  recordRunNotifications: vi.fn(),
+}));
 
 vi.mock("@/lib/ai", async (orig) => {
   const actual = await (orig() as Promise<Record<string, unknown>>);
@@ -151,6 +158,17 @@ describe("runAutomation (greenhouse)", () => {
     (prisma.company.findUnique as any).mockResolvedValue({ id: "co" });
     (prisma.jobSource.findUnique as any).mockResolvedValue({ id: "src" });
     (prisma.jobStatus.findFirst as any).mockResolvedValue({ id: "st" });
+    // resolveStageTypeForStatusId looks the status up by id, then resolves the
+    // stage type from its LABEL — an existing type, so no create path here.
+    (prisma.jobStatus.findUnique as any).mockResolvedValue({
+      id: "st",
+      label: "New",
+    });
+    (prisma.jobStageType.findUnique as any).mockResolvedValue({
+      id: "stg",
+      label: "New",
+    });
+    (prisma.jobStage.create as any).mockResolvedValue({ id: "stage1" });
 
     (generateText as any).mockResolvedValue({
       text: "SCORES: match=90 recommendation=strong match\n\n## Summary\nGreat fit",
@@ -170,7 +188,7 @@ describe("runAutomation (greenhouse)", () => {
 
     const result = await runAutomation(automation);
 
-    expect(result.status).toBe("completed");
+    expect(result.status).toBe("completed_with_errors");
     // Only the 2 floor-passers saved.
     expect((prisma.job.create as any).mock.calls).toHaveLength(2);
     // LLM called once per floor-passer (<= K).

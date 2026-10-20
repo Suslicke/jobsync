@@ -1,23 +1,19 @@
 "use client";
-import { File, ListFilter, RefreshCw, X } from "lucide-react";
+import { useState } from "react";
+import { Download, RefreshCw, X } from "lucide-react";
 import { CardHeader, CardTitle } from "../../ui/card";
 import { Button } from "../../ui/button";
 import { SearchInput } from "../../SearchInput";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "../../ui/select";
 import { RecordsCount } from "../../RecordsCount";
+import { DeleteAlertDialog } from "../../DeleteAlertDialog";
 import { JobsViewToggle } from "../JobsViewToggle";
 import { AddJob } from "../AddJob";
+import { JobsFilterPopover } from "./JobsFilterPopover";
+import { JobsFilterChips } from "./JobsFilterChips";
 import {
   Company,
+  JobFacets,
+  JobListScope,
   JobLocation,
   JobResponse,
   JobSource,
@@ -28,7 +24,7 @@ import {
 } from "@/models/job.model";
 
 // Presentational: the Jobs card header — title/count, active filter chips,
-// view toggle, search, filter select, export and Add Job.
+// view toggle, search, filter popover, export and Add Job.
 export function JobsToolbar({
   jobsCount,
   totalJobs,
@@ -46,8 +42,9 @@ export function JobsToolbar({
   onReload,
   searchTerm,
   onSearchTermChange,
-  filterKey,
-  onFilterChange,
+  facets,
+  onApplyFacets,
+  scope,
   onDownload,
   statuses,
   companies,
@@ -75,8 +72,9 @@ export function JobsToolbar({
   onReload: () => void;
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
-  filterKey: string;
-  onFilterChange: (filterBy: string) => void;
+  facets: JobFacets;
+  onApplyFacets: (facets: JobFacets) => void;
+  scope: JobListScope;
   onDownload: () => void;
   statuses: JobStatus[];
   companies: Company[];
@@ -88,6 +86,8 @@ export function JobsToolbar({
   resetEditJob: () => void;
   addJobInitialOpen: boolean;
 }) {
+  const [exportOpen, setExportOpen] = useState(false);
+
   return (
     <CardHeader className="flex-row flex-wrap justify-between items-center gap-3">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -152,50 +152,23 @@ export function JobsToolbar({
           onChange={onSearchTermChange}
           placeholder="Search jobs..."
         />
-        <Select value={filterKey} onValueChange={onFilterChange}>
-          <SelectTrigger
-            className="w-[120px] h-8"
-            data-testid="job-filter-select"
-          >
-            <ListFilter className="h-3.5 w-3.5" />
-            <SelectValue placeholder="Filter" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Filter by</SelectLabel>
-              <SelectSeparator />
-              <SelectItem value="none">All (Except Dismissed)</SelectItem>
-              <SelectItem value="applied">Applied</SelectItem>
-              <SelectItem value="interview">Interview</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              {/* Archived rows are out of the list by default — this is where
-                  a pass is reviewed, and where it is taken back. */}
-              <SelectItem value="archived">Passed (archived)</SelectItem>
-              <SelectItem value="hidden">Hidden employers</SelectItem>
-              <SelectItem value="PT">Part-time</SelectItem>
-              <SelectItem value="accepted">Accepted (discovered)</SelectItem>
-              <SelectItem value="dismissed">Dismissed (discovered)</SelectItem>
-              <SelectSeparator />
-              <SelectLabel>Fit</SelectLabel>
-              <SelectItem value="fit-clear">No blockers</SelectItem>
-              <SelectItem value="fit-blocked">Has blockers</SelectItem>
-              <SelectItem value="fit-unmeasured">Not measured</SelectItem>
-              <SelectItem value="fit-visa">Sponsors a visa</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <JobsFilterPopover
+          statuses={statuses}
+          facets={facets}
+          search={searchTerm}
+          scope={scope}
+          onApply={onApplyFacets}
+        />
         <Button
           size="sm"
           variant="outline"
-          className="h-8 gap-1"
+          className="h-8 w-8 p-0"
           disabled={initialLoading}
-          onClick={onDownload}
+          title="Export jobs"
+          onClick={() => setExportOpen(true)}
         >
-          <File className="h-3.5 w-3.5" />
-          <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-            Export
-          </span>
+          <Download className="h-3.5 w-3.5" />
+          <span className="sr-only">Export jobs</span>
         </Button>
         <AddJob
           jobStatuses={statuses}
@@ -209,6 +182,21 @@ export function JobsToolbar({
           initialOpen={addJobInitialOpen}
         />
       </div>
+      <DeleteAlertDialog
+        pageTitle="jobs"
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        onDelete={onDownload}
+        alertTitle="Export jobs?"
+        alertDescription="This downloads your jobs as a file."
+        actionLabel="Export"
+        actionVariant="default"
+      />
+      <JobsFilterChips
+        statuses={statuses}
+        facets={facets}
+        onChange={onApplyFacets}
+      />
     </CardHeader>
   );
 }

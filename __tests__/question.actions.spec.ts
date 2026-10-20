@@ -24,6 +24,9 @@ vi.mock("@prisma/client", () => {
     tag: {
       findMany: vi.fn(),
     },
+    jobStagePrepQuestion: {
+      count: vi.fn(),
+    },
   };
   return { PrismaClient: vi.fn(function() { return mPrismaClient; }) };
 });
@@ -47,6 +50,7 @@ describe("Question Actions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.jobStagePrepQuestion.count as any).mockResolvedValue(0);
   });
 
   // getQuestionsList
@@ -97,6 +101,25 @@ describe("Question Actions", () => {
           },
         }),
       );
+    });
+
+    it("should filter to one owned interview round when stageId is provided", async () => {
+      (getCurrentUser as any).mockResolvedValue(mockUser);
+      (prisma.question.findMany as any).mockResolvedValue([]);
+      (prisma.question.count as any).mockResolvedValue(0);
+
+      await getQuestionsList(1, 10, undefined, undefined, "stage-1");
+
+      const where = {
+        createdBy: mockUser.id,
+        prepLinks: {
+          some: { stageId: "stage-1", Stage: { Job: { userId: mockUser.id } } },
+        },
+      };
+      expect(prisma.question.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where }),
+      );
+      expect(prisma.question.count).toHaveBeenCalledWith({ where });
     });
 
     it("should search by question and answer content", async () => {
@@ -451,6 +474,28 @@ describe("Question Actions", () => {
 
       expect(result).toEqual({ success: false, message: "DB error" });
     });
+
+    it("blocks deleting a question that sits on a prep list, naming the count", async () => {
+      (getCurrentUser as any).mockResolvedValue(mockUser);
+      (prisma.jobStagePrepQuestion.count as any).mockResolvedValue(3);
+
+      const result = await deleteQuestion("q-1");
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("3");
+      expect(prisma.question.delete).not.toHaveBeenCalled();
+    });
+
+    it("deletes a question that is on no prep list", async () => {
+      (getCurrentUser as any).mockResolvedValue(mockUser);
+      (prisma.jobStagePrepQuestion.count as any).mockResolvedValue(0);
+      (prisma.question.delete as any).mockResolvedValue(mockQuestion);
+
+      const result = await deleteQuestion("q-1");
+
+      expect(result.success).toBe(true);
+      expect(prisma.question.delete).toHaveBeenCalled();
+    });
   });
 
   // getTagsWithQuestionCounts
@@ -488,6 +533,28 @@ describe("Question Actions", () => {
           },
         ],
         totalQuestions: 8,
+      });
+    });
+
+    it("should count only one owned interview round's questions when stageId is provided", async () => {
+      (getCurrentUser as any).mockResolvedValue(mockUser);
+      (prisma.tag.findMany as any).mockResolvedValue([]);
+      (prisma.question.count as any).mockResolvedValue(0);
+
+      await getTagsWithQuestionCounts("stage-1");
+
+      const prepLinks = {
+        some: { stageId: "stage-1", Stage: { Job: { userId: mockUser.id } } },
+      };
+      expect(prisma.tag.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: {
+            _count: { select: { questions: { where: { prepLinks } } } },
+          },
+        }),
+      );
+      expect(prisma.question.count).toHaveBeenCalledWith({
+        where: { createdBy: mockUser.id, prepLinks },
       });
     });
 

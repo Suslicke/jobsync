@@ -20,7 +20,13 @@ vi.mock("@prisma/client", () => {
     location: { findUnique: vi.fn(), create: vi.fn() },
     company: { findUnique: vi.fn(), create: vi.fn() },
     jobSource: { findUnique: vi.fn(), create: vi.fn() },
-    jobStatus: { findFirst: vi.fn(), create: vi.fn() },
+    jobStatus: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
+    jobStage: { create: vi.fn() },
+    jobStageType: {
+      findUnique: vi.fn(),
+      aggregate: vi.fn(),
+      create: vi.fn(),
+    },
   };
   return {
     PrismaClient: vi.fn(function () {
@@ -93,6 +99,10 @@ vi.mock("@/lib/ai/provider-registry.server", () => ({
 
 vi.mock("ai", () => ({ generateText: vi.fn() }));
 
+vi.mock("@/lib/notifications/record", () => ({
+  recordRunNotifications: vi.fn(),
+}));
+
 vi.mock("@/lib/ai", async (orig) => {
   const actual = await (orig() as Promise<Record<string, unknown>>);
   return { ...actual, getModel: vi.fn().mockResolvedValue({}) };
@@ -105,6 +115,7 @@ import { hydrateLinkedInJobs, searchLinkedInJobs } from "@/lib/scraper/linkedin"
 import { searchRemotiveJobs } from "@/lib/scraper/remotive";
 import { searchTelegramChannels } from "@/lib/scraper/telegram";
 import { generateText } from "ai";
+import { recordRunNotifications } from "@/lib/notifications/record";
 import type { Automation } from "@/models/automation.model";
 
 function makeJob(title: string, description = "", extra = {}) {
@@ -171,6 +182,17 @@ function setupPrismaMocks() {
     (prisma.company.findUnique as any).mockResolvedValue({ id: "co" });
     (prisma.jobSource.findUnique as any).mockResolvedValue({ id: "src" });
     (prisma.jobStatus.findFirst as any).mockResolvedValue({ id: "st" });
+    // Every saved job now gets its first current stage, which resolves the
+    // status-named stage type through the same Prisma mock.
+    (prisma.jobStatus.findUnique as any).mockResolvedValue({
+      id: "st",
+      label: "New",
+    });
+    (prisma.jobStageType.findUnique as any).mockResolvedValue({
+      id: "stage-type-new",
+      label: "New",
+    });
+    (prisma.jobStage.create as any).mockResolvedValue({ id: "stage-1" });
 
     (generateText as any).mockResolvedValue({
       text: "SCORES: match=90 recommendation=strong match\n\n## Summary\nGreat fit",
@@ -240,18 +262,6 @@ describe("runAutomation (lever)", () => {
     expect((searchLeverJobs as any).mock.calls.length).toBe(0);
   });
 
-  it("fails with all_sources_failed when every board errored and nothing came back", async () => {
-    (searchLeverJobs as any).mockResolvedValue({
-      jobs: [],
-      errors: [{ token: "acme", reason: "returned 500" }],
-    });
-
-    const result = await runAutomation(leverAutomation);
-
-    expect(result.status).toBe("failed");
-    expect(result.errorMessage).toBe("all_sources_failed");
-  });
-
   it("still completes when a board errored but other jobs arrived", async () => {
     (searchLeverJobs as any).mockResolvedValue({
       jobs: [makeJob("Frontend Engineer", "React")],
@@ -260,7 +270,8 @@ describe("runAutomation (lever)", () => {
 
     const result = await runAutomation(leverAutomation);
 
-    expect(result.status).toBe("completed");
+    // Saved, and still flagged: a board that stopped answering is news.
+    expect(result.status).toBe("completed_with_errors");
     expect(result.jobsSaved).toBe(1);
   });
 
@@ -334,6 +345,66 @@ describe("runAutomation (lever)", () => {
 
     const createArg = (prisma.job.create as any).mock.calls[0][0];
     expect("tags" in createArg.data).toBe(false);
+  });
+
+  describe("board failures", () => {
+    const twoBoards: Automation = {
+      ...leverAutomation,
+      sourceConfig: JSON.stringify({
+        lever: {
+          companies: [
+            { name: "Acme", token: "acme" },
+            { name: "Globex", token: "globex" },
+          ],
+          targetTitles: ["Frontend Engineer"],
+          keywords: [],
+          locations: [],
+          strictLocation: false,
+        },
+      }),
+    };
+
+    it("fails the run when every board errored", async () => {
+      (searchLeverJobs as any).mockResolvedValue({
+        jobs: [],
+        errors: [
+          { token: "acme", reason: "Board 'acme' returned 404" },
+          { token: "globex", reason: "Board 'globex' timed out" },
+        ],
+      });
+
+      const result = await runAutomation(twoBoards);
+
+      expect(result.status).toBe("failed");
+      expect(result.errorMessage).toBe("All 2 boards unreachable");
+      const finalizeData = (recordRunNotifications as any).mock.calls[0][1];
+      expect(finalizeData.boardErrors).toEqual([
+        { token: "acme", name: "Acme", reason: "Board 'acme' returned 404" },
+        { token: "globex", name: "Globex", reason: "Board 'globex' timed out" },
+      ]);
+    });
+
+    it("completes with errors when only some boards errored", async () => {
+      (searchLeverJobs as any).mockResolvedValue({
+        jobs: [],
+        errors: [{ token: "acme", reason: "Board 'acme' returned 404" }],
+      });
+
+      const result = await runAutomation(twoBoards);
+
+      // Takes the "nothing new" early return, which must still carry it.
+      expect(result.status).toBe("completed_with_errors");
+      expect(result.errorMessage).toBe("1 of 2 boards unreachable");
+      const finalizeData = (recordRunNotifications as any).mock.calls[0][1];
+      expect(finalizeData.boardErrors).toHaveLength(1);
+    });
+
+    it("stays completed when no board errored", async () => {
+      (searchLeverJobs as any).mockResolvedValue({ jobs: [], errors: [] });
+      const result = await runAutomation(twoBoards);
+      expect(result.status).toBe("completed");
+      expect(result.errorMessage).toBeUndefined();
+    });
   });
 });
 

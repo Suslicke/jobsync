@@ -1,6 +1,10 @@
 import type { JobBoard, LeverHost } from "@/models/automation.model";
 import { CoverLetter, Resume } from "./profile.model";
 import type { JobContactLink } from "./contact.model";
+// Type-only: jobStage.model.ts imports Tag from here and has a runtime export,
+// so a value import back would make a real module cycle.
+import type { JobStage } from "./jobStage.model";
+import type { SortDir } from "./sort.model";
 
 export interface JobForm {
   id?: string;
@@ -62,6 +66,7 @@ export interface JobResponse {
   reachData?: string | null;
   tags?: Tag[];
   contactLinks?: JobContactLink[];
+  stages?: JobStage[];
   createdVia?: string | null;
   discoveryStatus?: string | null;
   descriptionCompleteness?: DescriptionCompleteness | null;
@@ -69,6 +74,20 @@ export interface JobResponse {
 }
 
 export type JobsViewMode = "table" | "cards";
+
+// First-click direction per sortable column. The keys are also the server's
+// sort whitelist in getJobsList.
+export const JOB_SORT_FIELDS = {
+  appliedDate: "desc",
+  title: "asc",
+  company: "asc",
+  location: "asc",
+  matchScore: "desc",
+  reach: "desc",
+  source: "asc",
+} as const satisfies Record<string, SortDir>;
+
+export type JobSortField = keyof typeof JOB_SORT_FIELDS;
 
 export interface JobTitle {
   id: string;
@@ -97,6 +116,9 @@ export interface Company {
   websiteUrl?: string | null;
   careersUrl?: string | null;
   industry?: string | null;
+  linkedinUrl?: string | null;
+  size?: string | null;
+  notes?: string | null;
   _count?: {
     jobsApplied: number;
     jobsRejected?: number;
@@ -153,6 +175,38 @@ export enum WORKPLACE_TYPES {
   ONSITE = "Onsite",
 }
 
+// Jobs-page popover filters. Values are stored codes (FT, REMOTE) and status
+// values; OR within a field, AND across fields.
+export type JobFacets = {
+  statuses: string[];
+  acceptedDiscovered: boolean;
+  jobTypes: string[];
+  workplaces: string[];
+  includeDismissed: boolean;
+  /** Offline analysis verdicts, ORed: "clear" | "blocked" | "unmeasured". */
+  fit: string[];
+  /** Only postings that say they sponsor a visa. */
+  visa: boolean;
+  /** The employers ruled out wholesale, which the list otherwise leaves out. */
+  hiddenEmployers: boolean;
+};
+
+// Deep-link filters from the Library tables, kept separate from the popover.
+export type JobListScope = {
+  companyValue?: string;
+  appliedOnly?: boolean;
+  titleValue?: string;
+  locationValue?: string;
+  sourceValue?: string;
+};
+
+export type JobFilterCounts = {
+  total: number;
+  // Keyed by JobStatus.id.
+  statusCounts: Record<string, number>;
+  acceptedDiscovered: number;
+};
+
 // Matches free-text input against a fixed enum, ignoring case and separators,
 // and returns its [key, label] pair. These are closed sets, so — unlike
 // canonicalizeEntityValue, which keeps punctuation on purpose so "C++" and
@@ -189,15 +243,3 @@ export function getJobTypeLabel(
 
 export type DescriptionCompleteness = "title-only" | "partial" | "full";
 
-// Columns the jobs table can sort by, in the order the user picked them.
-export type JobSortField =
-  | "appliedDate"
-  | "title"
-  | "company"
-  | "location"
-  | "status"
-  | "matchScore"
-  | "reach"
-  | "source"
-  | "createdAt";
-export type JobSort = { field: JobSortField; dir: "asc" | "desc" };

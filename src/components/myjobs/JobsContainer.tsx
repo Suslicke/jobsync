@@ -10,6 +10,7 @@ import {
 import { toastError, toastSuccess } from "@/lib/toast";
 import {
   Company,
+  JOB_SORT_FIELDS,
   JobLocation,
   JobResponse,
   JobSource,
@@ -17,6 +18,7 @@ import {
   JobTitle,
   Tag,
 } from "@/models/job.model";
+import { useSort } from "@/hooks/useSort";
 import Loading from "../Loading";
 import { useRouter } from "next/navigation";
 import MyJobsTable from "./MyJobsTable";
@@ -27,6 +29,8 @@ import { useJobFilters } from "./jobs-container/useJobFilters";
 import { useJobsList } from "./jobs-container/useJobsList";
 import { downloadJobsList } from "./jobs-container/downloadJobsCsv";
 import { JobsToolbar } from "./jobs-container/JobsToolbar";
+import { EMPTY_JOB_FACETS, hasJobFacets } from "@/lib/jobs/jobFacets";
+import { Button } from "../ui/button";
 
 type MyJobsProps = {
   statuses: JobStatus[];
@@ -69,30 +73,33 @@ function JobsContainer({
     clearTitleFilter,
     clearLocationFilter,
     clearSourceFilter,
+    facets,
+    applyFacets,
   } = useJobFilters({ companies, titles, locations, sources });
+
+  const { sort, toggleSort } = useSort(JOB_SORT_FIELDS);
 
   const {
     jobs,
     viewMode,
     onChangeViewMode,
     totalJobs,
-    filterKey,
     searchTerm,
     setSearchTerm,
     initialLoading,
+    listLoaded,
     loadingMore,
     loadJobs,
     reloadJobs,
-    onFilterChange,
     sentinelRef,
-    sort,
-    toggleSort,
   } = useJobsList({
     companyFilter,
     appliedFilter,
     titleFilter,
     locationFilter,
     sourceFilter,
+    facets,
+    sort,
   });
 
   const onDeleteJob = async (jobId: string) => {
@@ -131,6 +138,10 @@ function JobsContainer({
     reloadJobs();
   };
 
+  const resetEditJob = () => {
+    setEditJob(null);
+  };
+
   const onFeedback = (job: JobResponse, kind: "applied" | "passed") =>
     setFeedbackTarget({ job, kind });
 
@@ -141,10 +152,6 @@ function JobsContainer({
     const archived = statuses.find((s) => s.value === "archived");
     if (archived) await updateJobStatus(feedbackTarget.job.id, archived);
     reloadJobs();
-  };
-
-  const resetEditJob = () => {
-    setEditJob(null);
   };
 
   const onAddNote = (jobId: string) => {
@@ -169,11 +176,18 @@ function JobsContainer({
           onClearLocationFilter={clearLocationFilter}
           sourceLabel={sourceLabel}
           onClearSourceFilter={clearSourceFilter}
-          onReload={() => loadJobs(1, filterKey, searchTerm || undefined)}
+          onReload={() => loadJobs(1, searchTerm || undefined)}
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
-          filterKey={filterKey}
-          onFilterChange={onFilterChange}
+          facets={facets}
+          onApplyFacets={applyFacets}
+          scope={{
+            companyValue: companyFilter || undefined,
+            appliedOnly: appliedFilter || undefined,
+            titleValue: titleFilter || undefined,
+            locationValue: locationFilter || undefined,
+            sourceValue: sourceFilter || undefined,
+          }}
           onDownload={downloadJobsList}
           statuses={statuses}
           companies={companies}
@@ -187,6 +201,21 @@ function JobsContainer({
         />
         <CardContent>
           {initialLoading && <Loading />}
+          {!initialLoading &&
+            listLoaded &&
+            jobs.length === 0 &&
+            hasJobFacets(facets) && (
+            <div className="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground">
+              <p>No jobs match these filters.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => applyFacets(EMPTY_JOB_FACETS)}
+              >
+                Clear all
+              </Button>
+            </div>
+          )}
           {jobs.length > 0 &&
             (viewMode === "cards" ? (
               <MyJobsGrid
@@ -200,8 +229,6 @@ function JobsContainer({
               />
             ) : (
               <MyJobsTable
-                sort={sort}
-                onToggleSort={toggleSort}
                 jobs={jobs}
                 jobStatuses={statuses}
                 deleteJob={onDeleteJob}
@@ -209,6 +236,8 @@ function JobsContainer({
                 onChangeJobStatus={onChangeJobStatus}
                 onAddNote={onAddNote}
                 onFeedback={onFeedback}
+                sort={sort}
+                onSort={toggleSort}
               />
             ))}
           {jobs.length < totalJobs && (
@@ -221,6 +250,12 @@ function JobsContainer({
         </CardContent>
         <CardFooter></CardFooter>
       </Card>
+      <NoteDialog
+        open={noteDialogOpen}
+        onOpenChange={setNoteDialogOpen}
+        jobId={noteJobId}
+        onSaved={() => reloadJobs()}
+      />
       {feedbackTarget && (
         <JobFeedbackDialog
           open={true}
@@ -239,12 +274,6 @@ function JobsContainer({
           onSaved={onFeedbackSaved}
         />
       )}
-      <NoteDialog
-        open={noteDialogOpen}
-        onOpenChange={setNoteDialogOpen}
-        jobId={noteJobId}
-        onSaved={() => reloadJobs()}
-      />
     </>
   );
 }

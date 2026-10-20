@@ -3,6 +3,7 @@
 import db from "@/lib/db";
 import { requireUser } from "../shared";
 import { generateText } from "ai";
+import { startAiCall } from "@/lib/aiUsage/tracker";
 import {
   getModel,
   parseJobMatch,
@@ -82,7 +83,7 @@ export async function analyzeDiscoveredJob(jobId: string): Promise<{
       return { success: false, message: "Failed to prepare match inputs" };
     }
 
-    const model = await getModel(ai.provider, ai.model || "llama3.2", user.id);
+    const model = await getModel(ai.provider, ai.model || "qwen3.5:9b", user.id);
 
     const promptText = buildJobMatchPrompt(
       resumePre.data.normalizedText,
@@ -94,7 +95,7 @@ export async function analyzeDiscoveredJob(jobId: string): Promise<{
       {
         ...genAiRequestAttrs({
           provider: ai.provider,
-          model: ai.model || "llama3.2",
+          model: ai.model || "qwen3.5:9b",
           temperature: 0.3,
           numCtx: APP_CONSTANTS.AI_OLLAMA_NUM_CTX,
           surface: SURFACES.JOB_MATCH,
@@ -109,11 +110,28 @@ export async function analyzeDiscoveredJob(jobId: string): Promise<{
         "jobsync.job_id": jobId,
       },
       async (span) => {
-        const generated = await generateText({
-          model,
-          system: JOB_MATCH_SYSTEM_PROMPT,
-          prompt: promptText,
-          temperature: 0.3,
+        // The Analyze button on a discovered job counts as Automations.
+        const tracker = startAiCall({
+          userId: user.id,
+          feature: "automations",
+          provider: ai.provider,
+          model: ai.model || "qwen3.5:9b",
+        });
+        let generated;
+        try {
+          generated = await generateText({
+            model,
+            system: JOB_MATCH_SYSTEM_PROMPT,
+            prompt: promptText,
+            temperature: 0.3,
+          });
+        } catch (error) {
+          void tracker.finish({ error });
+          throw error;
+        }
+        void tracker.finish({
+          usage: generated.totalUsage,
+          finishReason: generated.finishReason,
         });
         span.setAttrs(
           genAiResponseAttrs({
