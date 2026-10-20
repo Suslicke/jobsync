@@ -8,6 +8,7 @@ import {
   DeepseekModel,
   GeminiModel,
   CodexModel,
+  GeminiCliModel,
 } from "@/models/ai.model";
 import {
   PROVIDER_REGISTRY,
@@ -84,6 +85,8 @@ function AiSettings() {
         return Object.values(GeminiModel);
       case AiProvider.CODEX:
         return Object.values(CodexModel);
+      case AiProvider.GEMINI_CLI:
+        return Object.values(GeminiCliModel);
       default:
         return [];
     }

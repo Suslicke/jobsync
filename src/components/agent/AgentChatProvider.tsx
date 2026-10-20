@@ -252,12 +252,12 @@ function useAgentChatValue(initialMessages: UIMessage[]) {
     }
 
     // The assistant acts through tools, and Codex CLI answers text only.
-    if (provider === AiProvider.CODEX) {
+    if (provider === AiProvider.CODEX || provider === AiProvider.GEMINI_CLI) {
       setPreflight({
         checked: true,
         ok: false,
         error:
-          "Codex CLI scores jobs and reviews resumes, but cannot run the assistant. Pick another provider in Settings to chat.",
+          "Codex CLI and Gemini CLI score jobs and review resumes, but cannot run the assistant. Pick another provider in Settings to chat.",
         provider,
         model: ai.model,
       });

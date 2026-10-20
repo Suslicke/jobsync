@@ -21,6 +21,7 @@ export enum AiProvider {
   GEMINI = "gemini",
   OPENROUTER = "openrouter",
   CODEX = "codex",
+  GEMINI_CLI = "gemini-cli",
 }
 
 // Default models per provider
@@ -51,6 +52,14 @@ export enum GeminiModel {
 export enum CodexModel {
   GPT_6_1_SOL = "gpt-6.1-sol",
   GPT_6_ASTRA = "gpt-6-astra",
+}
+
+// Gemini CLI's own aliases; `auto` picks pro or the preview model itself.
+export enum GeminiCliModel {
+  AUTO = "auto",
+  PRO = "pro",
+  FLASH = "flash",
+  FLASH_LITE = "flash-lite",
 }
 
 export const defaultModel: AiModel = {

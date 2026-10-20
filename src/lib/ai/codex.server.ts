@@ -45,7 +45,7 @@ const limit = pLimit(Number(process.env.CODEX_CONCURRENCY) || 1);
 // AUTH_SECRET, ENCRYPTION_KEY and the other providers' keys stay out of it.
 const ENV_ALLOWLIST = new Set([
   "path", "home", "user", "logname", "lang", "lc_all", "tmp", "tmpdir",
-  "codex_home", "xdg_config_home", "http_proxy", "https_proxy", "all_proxy",
+  "codex_home", "gemini_cli_home", "no_browser", "xdg_config_home", "http_proxy", "https_proxy", "all_proxy",
   "no_proxy", "ssl_cert_file", "ssl_cert_dir",
 ]);
 

@@ -133,9 +133,25 @@ export const PROVIDER_REGISTRY: Record<string, ProviderRegistryEntry> = {
       sensitive: false,
     },
   },
+
+  "gemini-cli": {
+    id: "gemini-cli",
+    displayName: "Gemini CLI (Google account)",
+    credentialType: "login",
+    category: "cloud",
+    requiresRunningCheck: true,
+    supportsKeepAlive: false,
+    keyConfig: {
+      placeholder: "",
+      inputType: "text",
+      description:
+        "Signed in on the server with `gemini` (Google account, daily quota); answers text only, so the assistant chat needs another provider",
+      sensitive: false,
+    },
+  },
 };
 
-export const AI_PROVIDERS = ["ollama", "openai", "deepseek", "openrouter", "gemini", "codex"] as const;
+export const AI_PROVIDERS = ["ollama", "openai", "deepseek", "openrouter", "gemini", "codex", "gemini-cli"] as const;
 export type AiProviderId = (typeof AI_PROVIDERS)[number];
 
 export function getAiProviders(): ProviderRegistryEntry[] {

@@ -6,6 +6,7 @@ import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { APP_CONSTANTS } from "@/lib/constants";
 import { CodexCliLanguageModel, verifyCodexLogin } from "@/lib/ai/codex.server";
+import { GeminiCliLanguageModel, verifyGeminiLogin } from "@/lib/ai/gemini.server";
 
 export const PROVIDER_FACTORIES: Record<
   string,
@@ -19,6 +20,7 @@ export const PROVIDER_FACTORIES: Record<
     createOllama({ baseURL: baseURL + "/api" })(model),
   gemini: (apiKey, model) => createGoogleGenerativeAI({ apiKey })(model),
   codex: (_login, model) => new CodexCliLanguageModel(model),
+  "gemini-cli": (_login, model) => new GeminiCliLanguageModel(model),
 };
 
 export const PROVIDER_VERIFIERS: Record<
@@ -26,6 +28,7 @@ export const PROVIDER_VERIFIERS: Record<
   (key: string) => Promise<{ success: boolean; error?: string }>
 > = {
   codex: () => verifyCodexLogin(),
+  "gemini-cli": () => verifyGeminiLogin(),
 
   openai: async (key) => {
     const res = await fetch("https://api.openai.com/v1/models", {

@@ -14,5 +14,6 @@ npx -y prisma@6.19.0 migrate deploy
 chown -R nextjs:nodejs /data
 # The Codex CLI sign-in volume, mounted over a directory the image created.
 [ -n "$CODEX_HOME" ] && [ -d "$CODEX_HOME" ] && chown -R nextjs:nodejs "$CODEX_HOME"
+[ -n "$GEMINI_CLI_HOME" ] && [ -d "$GEMINI_CLI_HOME" ] && chown -R nextjs:nodejs "$GEMINI_CLI_HOME"
 export HOME=/home/nextjs
 exec su -s /bin/sh nextjs -c "HOSTNAME=0.0.0.0 PORT=${PORT:-3737} node server.js"

@@ -77,6 +77,15 @@ RUN --mount=type=bind,from=codex-archive,source=/codex.tar.gz,target=/tmp/codex.
     && install -d -o nextjs -g nodejs -m 0700 /home/nextjs/.codex
 ENV CODEX_HOME=/home/nextjs/.codex
 
+# Gemini CLI, for the "Gemini CLI (Google account)" provider. A Node package,
+# so it rides on the image's own Node. The sign-in lives in GEMINI_CLI_HOME
+# (a volume): `NO_BROWSER=true gemini` once, then it renews itself.
+ARG GEMINI_CLI_VERSION=0.65.0
+RUN npm install -g --no-audit --no-fund @google/gemini-cli@${GEMINI_CLI_VERSION} \
+    && npm cache clean --force \
+    && install -d -o nextjs -g nodejs -m 0700 /home/nextjs/gemini
+ENV GEMINI_CLI_HOME=/home/nextjs/gemini
+
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
