@@ -130,6 +130,13 @@ describe("CodexCliLanguageModel", () => {
   });
 });
 
+describe("buildArgv", () => {
+  it("passes the model as one token and refuses one that reads as a flag", () => {
+    expect(codex.buildArgv("gpt-6.1-sol", "/tmp/w")).toContain("--model=gpt-6.1-sol");
+    expect(() => codex.buildArgv("--dangerously-bypass-approvals-and-sandbox", "/tmp/w")).toThrow(/model name/);
+  });
+});
+
 describe("isCodexAllowed", () => {
   afterEach(() => {
     delete process.env.CODEX_ALLOWED_USERS;

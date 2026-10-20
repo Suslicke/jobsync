@@ -74,7 +74,7 @@ describe("GeminiCliLanguageModel", () => {
     expect(settings.tools.core).toEqual([]);
     const argv = readFileSync(join(home, "argv.txt"), "utf8");
     expect(argv).toContain("--output-format json");
-    expect(argv).toContain("-m flash");
+    expect(argv).toContain("--model=flash");
   });
 
   it("reports a spent quota as such", async () => {
@@ -83,6 +83,11 @@ describe("GeminiCliLanguageModel", () => {
 
   it("refuses an answer that came after a tool call", async () => {
     await expect(generateText({ model, prompt: "TOOL" })).rejects.toThrow(/tool call/);
+  });
+
+  it("refuses a model name that would read as a flag", async () => {
+    const evil = new gemini.GeminiCliLanguageModel("--approval-mode=yolo");
+    await expect(generateText({ model: evil, prompt: "hi" })).rejects.toThrow(/model name/);
   });
 
   it("refuses a call that offers tools", async () => {

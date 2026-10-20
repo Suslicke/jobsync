@@ -55,11 +55,23 @@ export function childEnvironment(env: Record<string, string | undefined> = proce
   ) as NodeJS.ProcessEnv;
 }
 
+// The model name comes from user settings and lands on a command line: only a
+// plain model id may pass, and it travels as one `--model=` token, so a value
+// like "--dangerously-bypass-approvals-and-sandbox" can never become a flag.
+export const MODEL_ID = /^[a-z0-9][a-z0-9._:-]{0,63}$/i;
+
+export function assertModelId(model: string, provider: string): string {
+  if (!MODEL_ID.test(model)) {
+    throw new UnsupportedFunctionalityError({ functionality: `${provider} model name "${model.slice(0, 40)}"` });
+  }
+  return model;
+}
+
 export function buildArgv(model: string, workDir: string): string[] {
   return [
     "-a", "never", "exec",
     "--ignore-user-config", "--ignore-rules", "--ephemeral", "--skip-git-repo-check",
-    "-C", workDir, "-m", model, "-s", SANDBOX,
+    "-C", workDir, `--model=${assertModelId(model, "Codex CLI")}`, "-s", SANDBOX,
     "--disable", "shell_tool", "--disable", "unified_exec", "--disable", "multi_agent",
     "-c", 'web_search="disabled"', "-c", "project_doc_max_bytes=0",
     "-c", `model_reasoning_effort="${REASONING_EFFORT}"`,

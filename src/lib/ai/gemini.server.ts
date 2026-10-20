@@ -13,7 +13,7 @@ import type {
   SharedV3Warning,
 } from "@ai-sdk/provider";
 import { APICallError, UnsupportedFunctionalityError } from "@ai-sdk/provider";
-import { childEnvironment, promptToText } from "@/lib/ai/codex.server";
+import { assertModelId, childEnvironment, promptToText } from "@/lib/ai/codex.server";
 
 /**
  * Gemini CLI as an AI SDK language model, signed in with a Google account
@@ -40,7 +40,7 @@ export const REQUIRED_SETTINGS = {
   mcpServers: {},
 };
 
-export function mergeSettings(current: Record<string, any>) {
+export function mergeSettings(current: Record<string, any>): Record<string, any> {
   return {
     ...current,
     security: {
@@ -160,7 +160,8 @@ function runGemini(model: string, input: string, signal?: AbortSignal): Promise<
     const workDir = await mkdtemp(join(tmpdir(), "jobsync-gemini-"));
     try {
       const argv = ["-p", "", "--output-format", "json", "--skip-trust", "--approval-mode", "default"];
-      if (model && model !== "auto") argv.push("-m", model);
+      // One token, and only a plain id — see assertModelId.
+      if (model && model !== "auto") argv.push(`--model=${assertModelId(model, "Gemini CLI")}`);
       const stdout = await new Promise<string>((resolve, reject) => {
         const child = spawn(EXECUTABLE, argv, {
           cwd: workDir,
