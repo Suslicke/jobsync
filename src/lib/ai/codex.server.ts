@@ -5,7 +5,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pLimit from "p-limit";
-import db from "@/lib/db";
 import type {
   LanguageModelV3,
   LanguageModelV3CallOptions,
@@ -330,17 +329,16 @@ export class CodexCliLanguageModel implements LanguageModelV3 {
 /**
  * The sign-in is one person's ChatGPT plan, and JobSync is multi-user: every
  * account on the instance would otherwise spend it. CODEX_ALLOWED_USERS lists
- * who may (user ids or emails, comma-separated); unset means nobody.
+ * who may, as user ids, comma-separated; unset means nobody. Ids and not
+ * emails: an email is typed at signup, unverified and compared by case, so a
+ * look-alike account could claim it — an id is assigned by the server.
  */
 export async function isCodexAllowed(userId: string | undefined): Promise<boolean> {
   const allowed = (process.env.CODEX_ALLOWED_USERS ?? "")
     .split(",")
-    .map((s) => s.trim().toLowerCase())
+    .map((s) => s.trim())
     .filter(Boolean);
-  if (!userId || allowed.length === 0) return false;
-  if (allowed.includes(userId.toLowerCase())) return true;
-  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true } });
-  return !!user?.email && allowed.includes(user.email.toLowerCase());
+  return !!userId && allowed.includes(userId);
 }
 
 export const CODEX_NOT_ALLOWED =
