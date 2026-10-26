@@ -274,6 +274,11 @@ export const APP_CONSTANTS = {
   // Scope that unlocks every server action over MCP (see lib/mcp/actions).
   MCP_FULL_SCOPE: "full",
   MCP_FULL_TOKEN_MAX_DAYS: 30,
+  // Scope for the admin hub: GET /hub/v1/summary only, no MCP tools. A token
+  // that carries nothing else is refused by /api/mcp (see lib/mcp/auth).
+  MCP_HUB_READ_SCOPE: "hub:read",
+  // Calendar day for the hub summary's "today" counts (hub protocol: owner TZ).
+  HUB_DEFAULT_TIME_ZONE: "Asia/Almaty",
   MCP_RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,
   MCP_DEFAULT_JOB_TYPE: "Full-time",
   MCP_DEFAULT_STATUS: "draft",

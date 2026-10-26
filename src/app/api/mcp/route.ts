@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { resolveMcpToken } from "@/lib/mcp/auth";
+import { isHubOnlyToken, resolveMcpToken } from "@/lib/mcp/auth";
 import { MCP_TOOL_DESCRIPTIONS } from "@/lib/mcp/toolDescriptions";
 import {
   McpAddJobInputShape,
@@ -55,6 +55,15 @@ async function handler(req: Request): Promise<Response> {
   if (!auth.ok) {
     return new Response(JSON.stringify({ error: auth.error }), {
       status: auth.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // A hub token reads the summary at /hub/v1/summary and gets no MCP tools at all
+  // (review_resume / save_resume_review have no scope gate, so refuse it here).
+  if (isHubOnlyToken(auth.scopes)) {
+    return new Response(JSON.stringify({ error: "This token only grants hub:read" }), {
+      status: 403,
       headers: { "Content-Type": "application/json" },
     });
   }

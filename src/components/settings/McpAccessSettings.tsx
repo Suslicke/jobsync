@@ -78,13 +78,24 @@ function TokenRevealDialog({
   token,
   tokenName,
   mcpUrl,
+  hubOnly,
   onClose,
 }: {
   token: string;
   tokenName: string;
   mcpUrl: string;
+  hubOnly: boolean;
   onClose: () => void;
 }) {
+  const hubUrl = (() => {
+    try {
+      return new URL("/hub/v1/summary", mcpUrl).toString();
+    } catch {
+      return "/hub/v1/summary";
+    }
+  })();
+  const hubSnippet = `curl -H "Authorization: Bearer ${token}" ${hubUrl}`;
+
   const ocSnippet = JSON.stringify(
     {
       mcpServers: {
@@ -129,11 +140,21 @@ function TokenRevealDialog({
               <CopyButton text={token} />
             </div>
           </div>
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground">Client config snippets</p>
-            <CodeSnippet label="OpenClaw / Hermes (streamable-http)" code={ocSnippet} />
-            <CodeSnippet label="Claude Desktop (via mcp-remote)" code={claudeSnippet} />
-          </div>
+          {hubOnly ? (
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">
+                Hub summary only. In the admin hub use type &ldquo;hub&rdquo; with this summary URL.
+              </p>
+              <CodeSnippet label="Summary URL" code={hubUrl} />
+              <CodeSnippet label="Check it" code={hubSnippet} />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">Client config snippets</p>
+              <CodeSnippet label="OpenClaw / Hermes (streamable-http)" code={ocSnippet} />
+              <CodeSnippet label="Claude Desktop (via mcp-remote)" code={claudeSnippet} />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button onClick={onClose}>I saved my token</Button>
@@ -156,7 +177,10 @@ export default function McpAccessSettings() {
   );
 
   const [fullAccess, setFullAccess] = useState(false);
-  const [revealedToken, setRevealedToken] = useState<{ token: string; name: string } | null>(null);
+  const [hubOnly, setHubOnly] = useState(false);
+  const [revealedToken, setRevealedToken] = useState<
+    { token: string; name: string; hubOnly: boolean } | null
+  >(null);
 
   const mcpUrl =
     typeof window !== "undefined"
@@ -175,16 +199,21 @@ export default function McpAccessSettings() {
   const handleGenerate = async () => {
     if (!tokenName.trim()) return;
     setGenerating(true);
-    const result = await createMcpToken({ name: tokenName.trim(), expiryDays, fullAccess });
+    const result = await createMcpToken({ name: tokenName.trim(), expiryDays, fullAccess, hubOnly });
     setGenerating(false);
     if (!result.success) {
       toastError(result.message);
       return;
     }
-    setRevealedToken({ token: result.token, name: result.record.name });
+    setRevealedToken({
+      token: result.token,
+      name: result.record.name,
+      hubOnly: result.record.scopes.includes(APP_CONSTANTS.MCP_HUB_READ_SCOPE),
+    });
     setShowGenerateDialog(false);
     setTokenName("");
     setFullAccess(false);
+    setHubOnly(false);
     setExpiryDays(APP_CONSTANTS.MCP_TOKEN_EXPIRY_DEFAULT_DAYS as 30 | 90 | 365);
     await fetchTokens();
   };
@@ -208,6 +237,7 @@ export default function McpAccessSettings() {
           token={revealedToken.token}
           tokenName={revealedToken.name}
           mcpUrl={mcpUrl}
+          hubOnly={revealedToken.hubOnly}
           onClose={() => setRevealedToken(null)}
         />
       )}
@@ -333,7 +363,31 @@ export default function McpAccessSettings() {
                   {APP_CONSTANTS.MCP_FULL_TOKEN_MAX_DAYS} days.
                 </p>
               </div>
-              <Switch id="mcp-full-access" checked={fullAccess} onCheckedChange={setFullAccess} />
+              <Switch
+                id="mcp-full-access"
+                checked={fullAccess}
+                onCheckedChange={(v) => {
+                  setFullAccess(v);
+                  if (v) setHubOnly(false);
+                }}
+              />
+            </div>
+            <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+              <div className="space-y-1">
+                <Label htmlFor="mcp-hub-only">Hub summary only</Label>
+                <p className="text-xs text-muted-foreground">
+                  Read-only token for the admin hub: it can only read the counts at /hub/v1/summary
+                  (new jobs, applications, interviews) and cannot call any MCP tool.
+                </p>
+              </div>
+              <Switch
+                id="mcp-hub-only"
+                checked={hubOnly}
+                onCheckedChange={(v) => {
+                  setHubOnly(v);
+                  if (v) setFullAccess(false);
+                }}
+              />
             </div>
           </div>
           <DialogFooter>
