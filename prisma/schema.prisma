@@ -765,7 +765,7 @@ model McpAccessToken {
   name        String
   tokenHash   String    @unique
   tokenPrefix String
-  scopes      String    // JSON array string; new tokens are always ["jobs:write","questions:write","resume:write"]
+  scopes      String    // JSON array string: ["jobs:write","questions:write","resume:write"] (+ "full"), or ["hub:read"] for an admin-hub token
   expiresAt   DateTime
   lastUsedAt  DateTime?
   createdAt   DateTime  @default(now())

@@ -1,5 +1,6 @@
 import prisma from "@/lib/db";
 import { hashToken } from "./tokens";
+import { APP_CONSTANTS } from "@/lib/constants";
 
 type AuthSuccess = { ok: true; userId: string; scopes: string[]; tokenName: string };
 type AuthFailure = { ok: false; status: 401 | 403; error: string };
@@ -39,4 +40,17 @@ export async function resolveMcpToken(req: Request): Promise<AuthSuccess | AuthF
     return { ok: false, status: 401, error: "Malformed token scopes" };
   }
   return { ok: true, userId: record.userId, scopes, tokenName: record.name };
+}
+
+/** True when every scope is `hub:read`: such a token may read the hub summary and nothing else. */
+export function isHubOnlyToken(scopes: string[]): boolean {
+  return scopes.length > 0 && scopes.every((s) => s === APP_CONSTANTS.MCP_HUB_READ_SCOPE);
+}
+
+/** May this token read GET /hub/v1/summary? `hub:read` or `full`. */
+export function canReadHubSummary(scopes: string[]): boolean {
+  return (
+    scopes.includes(APP_CONSTANTS.MCP_HUB_READ_SCOPE) ||
+    scopes.includes(APP_CONSTANTS.MCP_FULL_SCOPE)
+  );
 }

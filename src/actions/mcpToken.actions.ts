@@ -20,12 +20,18 @@ export async function createMcpToken(input: {
   name: string;
   expiryDays: 30 | 90 | 365;
   fullAccess?: boolean;
+  /** Admin-hub token: scope `hub:read` only, reads GET /hub/v1/summary and no MCP tools. */
+  hubOnly?: boolean;
 }): Promise<
   | { success: true; token: string; record: PublicTokenMeta }
   | { success: false; message: string }
 > {
   try {
     const user = await requireUser();
+
+    if (input.hubOnly && input.fullAccess) {
+      return { success: false, message: "A hub token can't also have full access." };
+    }
 
     const count = await prisma.mcpAccessToken.count({ where: { userId: user.id } });
     if (count >= APP_CONSTANTS.MCP_TOKEN_MAX_PER_USER) {
@@ -37,6 +43,7 @@ export async function createMcpToken(input: {
 
     const { plaintext, hash, prefix } = generateToken();
     // A full-access token can call every server action, so it never lives longer than 30 days.
+    // A hub token follows the non-full rule: it only reads counts.
     const days = input.fullAccess
       ? Math.min(input.expiryDays, APP_CONSTANTS.MCP_FULL_TOKEN_MAX_DAYS)
       : input.expiryDays;
@@ -48,12 +55,16 @@ export async function createMcpToken(input: {
         name: input.name.trim(),
         tokenHash: hash,
         tokenPrefix: prefix,
-        scopes: JSON.stringify([
-          "jobs:write",
-          "questions:write",
-          "resume:write",
-          ...(input.fullAccess ? [APP_CONSTANTS.MCP_FULL_SCOPE] : []),
-        ]),
+        scopes: JSON.stringify(
+          input.hubOnly
+            ? [APP_CONSTANTS.MCP_HUB_READ_SCOPE]
+            : [
+                "jobs:write",
+                "questions:write",
+                "resume:write",
+                ...(input.fullAccess ? [APP_CONSTANTS.MCP_FULL_SCOPE] : []),
+              ],
+        ),
         expiresAt,
       },
     });
