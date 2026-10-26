@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { signInWithPocketId } from "@/actions/auth.actions";
+import { signInWithPocketId } from "@/actions/pocketId.actions";
 import { Button } from "../ui/button";
 import Loading from "../Loading";
 

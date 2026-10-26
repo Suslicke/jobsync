@@ -36,7 +36,7 @@ const nextAuth = NextAuth({
     signIn: (params) => pocketIdSignIn(params),
     async jwt(params) {
       if (params.account?.provider === POCKET_ID_PROVIDER_ID) {
-        return pocketIdJwt(params.token, params.profile);
+        return pocketIdJwt(params.token, params.account);
       }
       return authConfig.callbacks.jwt(params);
     },

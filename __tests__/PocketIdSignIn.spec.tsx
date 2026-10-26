@@ -5,10 +5,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+vi.mock("@/actions/pocketId.actions", () => ({
+  signInWithPocketId: vi.fn(),
+}));
+
 vi.mock("@/actions/auth.actions", () => ({
   authenticate: vi.fn(),
   signup: vi.fn(),
-  signInWithPocketId: vi.fn(),
 }));
 
 describe("Sign in with Pocket ID button", () => {

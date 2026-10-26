@@ -18,8 +18,9 @@ const OUT = path.join(ROOT, "src/lib/mcp/actions/catalog.generated.ts");
 // - createMcpToken: a token must not mint longer-lived tokens for itself
 // - getOllamaBaseUrl: accepts an arbitrary userId (cross-user read)
 // - mock.actions: bulk-generates/clears demo data
+// - pocketId.actions: binds/unbinds an SSO login to the account (browser only)
 const EXCLUDE = new Set(["signup", "authenticate", "createMcpToken", "getOllamaBaseUrl"]);
-const EXCLUDE_FILES = new Set(["mock.actions.ts"]);
+const EXCLUDE_FILES = new Set(["mock.actions.ts", "pocketId.actions.ts"]);
 
 const walk = (dir) =>
   fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>

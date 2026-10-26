@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from "crypto";
+import { cookies } from "next/headers";
 import type { OIDCConfig } from "next-auth/providers";
 import type { JWT } from "next-auth/jwt";
 import type { Account, Profile } from "next-auth";
@@ -5,15 +7,25 @@ import prisma from "@/lib/db";
 
 // Optional "Sign in with Pocket ID" login, next to the password login.
 //
-// It is off unless all three env vars are set. It never creates users: a
-// Pocket ID login is mapped onto the existing JobSync user whose email equals
-// the verified email Pocket ID reports. Which Pocket ID users may log in at all
-// is decided in Pocket ID (the client is restricted to a user group).
+// It is off unless all three env vars are set. A Pocket ID login is bound to a
+// JobSync user by Pocket ID's subject ("sub"), never by email: emails can be
+// changed in Pocket ID, the subject cannot. The binding is created only from a
+// session that is already signed in (Settings -> Sign-in -> Connect Pocket ID).
+// Sign-in with an unbound subject is refused; no user is ever created.
+// Which Pocket ID users may get a token at all is decided in Pocket ID (the
+// client is restricted to a user group).
 
 export const POCKET_ID_PROVIDER_ID = "pocket-id";
 
-// Error code the sign-in page shows when no JobSync user matches.
-export const POCKET_ID_NO_ACCOUNT_ERROR = "PocketIdNoAccount";
+// Error codes shown on /signin and in Settings.
+export const POCKET_ID_NOT_LINKED_ERROR = "PocketIdNotLinked";
+export const POCKET_ID_ALREADY_LINKED_ERROR = "PocketIdAlreadyLinked";
+
+// Cookie that marks the next Pocket ID callback as "connect to this user".
+export const POCKET_ID_LINK_COOKIE = "jobsync.pocket-id-link";
+export const POCKET_ID_LINK_TTL_SECONDS = 600;
+
+export const POCKET_ID_SETTINGS_PATH = "/dashboard/settings";
 
 export interface PocketIdConfig {
   issuer: string;
@@ -51,38 +63,165 @@ export function pocketIdProvider(config: PocketIdConfig): OIDCConfig<Profile> {
   };
 }
 
-function verifiedEmail(profile: Profile | undefined): string | null {
-  if (!profile || profile.email_verified !== true) return null;
-  const email = typeof profile.email === "string" ? profile.email.trim() : "";
-  return email || null;
+// ---- link intent: "<userId>.<expiresAtSeconds>.<hmac>" signed with AUTH_SECRET
+
+function linkSecret(): string {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET is not set");
+  return secret;
 }
 
-// The existing JobSync user for this Pocket ID profile, or null. Read-only.
-export async function findUserForPocketId(profile: Profile | undefined) {
-  const email = verifiedEmail(profile);
-  if (!email) return null;
-  return prisma.user.findUnique({
-    where: { email },
-    select: { id: true, name: true, email: true },
+function sign(payload: string): string {
+  return createHmac("sha256", linkSecret())
+    .update(`pocket-id-link:${payload}`)
+    .digest("base64url");
+}
+
+export function createLinkIntent(userId: string, nowMs = Date.now()): string {
+  const expires = Math.floor(nowMs / 1000) + POCKET_ID_LINK_TTL_SECONDS;
+  const payload = `${userId}.${expires}`;
+  return `${payload}.${sign(payload)}`;
+}
+
+// The user id the intent was minted for, or null if forged, malformed or expired.
+export function verifyLinkIntent(
+  value: string | undefined | null,
+  nowMs = Date.now(),
+): string | null {
+  if (!value) return null;
+  const parts = value.split(".");
+  if (parts.length !== 3) return null;
+  const [userId, expires, mac] = parts;
+  if (!userId || !/^\d+$/.test(expires)) return null;
+  const expected = Buffer.from(sign(`${userId}.${expires}`));
+  const given = Buffer.from(mac);
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
+    return null;
+  }
+  if (Number(expires) * 1000 < nowMs) return null;
+  return userId;
+}
+
+// Set by the "Connect Pocket ID" server action for the signed-in user.
+export async function setLinkIntentCookie(userId: string) {
+  const store = await cookies();
+  store.set(POCKET_ID_LINK_COOKIE, createLinkIntent(userId), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: POCKET_ID_LINK_TTL_SECONDS,
   });
 }
 
-// signIn callback branch: let the login through only for a matching user.
-export async function pocketIdSignIn(params: {
-  account?: Account | null;
-  profile?: Profile;
-}): Promise<boolean | string> {
+async function consumeLinkIntentCookie(): Promise<string | null> {
+  const store = await cookies();
+  const value = store.get(POCKET_ID_LINK_COOKIE)?.value;
+  if (value) {
+    try {
+      store.delete(POCKET_ID_LINK_COOKIE);
+    } catch {
+      // Read-only cookie store; the intent still expires on its own.
+    }
+  }
+  return verifyLinkIntent(value);
+}
+
+// ---- bindings
+
+export async function findUserBySubject(subject: string | undefined | null) {
+  if (!subject) return null;
+  const identity = await prisma.oidcIdentity.findUnique({
+    where: {
+      provider_subject: { provider: POCKET_ID_PROVIDER_ID, subject },
+    },
+    select: { user: { select: { id: true, name: true, email: true } } },
+  });
+  return identity?.user ?? null;
+}
+
+// Bind `subject` to `userId`. Refuses a subject already bound to someone else;
+// replaces the user's previous Pocket ID binding, if any.
+export async function linkSubjectToUser(
+  userId: string,
+  subject: string,
+): Promise<"linked" | "already-linked-elsewhere" | "no-user"> {
+  const existing = await prisma.oidcIdentity.findUnique({
+    where: {
+      provider_subject: { provider: POCKET_ID_PROVIDER_ID, subject },
+    },
+    select: { userId: true },
+  });
+  if (existing) {
+    return existing.userId === userId ? "linked" : "already-linked-elsewhere";
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!user) return "no-user";
+  await prisma.$transaction([
+    prisma.oidcIdentity.deleteMany({
+      where: { userId, provider: POCKET_ID_PROVIDER_ID },
+    }),
+    prisma.oidcIdentity.create({
+      data: { userId, provider: POCKET_ID_PROVIDER_ID, subject },
+    }),
+  ]);
+  return "linked";
+}
+
+export async function unlinkPocketIdForUser(userId: string) {
+  await prisma.oidcIdentity.deleteMany({
+    where: { userId, provider: POCKET_ID_PROVIDER_ID },
+  });
+}
+
+export async function getPocketIdLinkForUser(userId: string) {
+  return prisma.oidcIdentity.findUnique({
+    where: { userId_provider: { userId, provider: POCKET_ID_PROVIDER_ID } },
+    select: { createdAt: true },
+  });
+}
+
+// ---- NextAuth callbacks
+
+function subjectOf(account: Account | null | undefined): string | null {
+  const sub = account?.providerAccountId;
+  return typeof sub === "string" && sub.length > 0 ? sub : null;
+}
+
+// signIn callback. `linkIntentUserId` is read from the link cookie when omitted.
+export async function pocketIdSignIn(
+  params: { account?: Account | null; profile?: Profile },
+  linkIntentUserId?: string | null,
+): Promise<boolean | string> {
   if (params.account?.provider !== POCKET_ID_PROVIDER_ID) return true;
-  const user = await findUserForPocketId(params.profile);
-  if (!user) return `/signin?error=${POCKET_ID_NO_ACCOUNT_ERROR}`;
+  const subject = subjectOf(params.account);
+  const intentUserId =
+    linkIntentUserId === undefined
+      ? await consumeLinkIntentCookie()
+      : linkIntentUserId;
+
+  if (intentUserId) {
+    if (!subject) {
+      return `${POCKET_ID_SETTINGS_PATH}?pocketIdError=${POCKET_ID_NOT_LINKED_ERROR}`;
+    }
+    const result = await linkSubjectToUser(intentUserId, subject);
+    if (result === "linked") return true;
+    return `${POCKET_ID_SETTINGS_PATH}?pocketIdError=${POCKET_ID_ALREADY_LINKED_ERROR}`;
+  }
+
+  const user = await findUserBySubject(subject);
+  if (!user) return `/signin?error=${POCKET_ID_NOT_LINKED_ERROR}`;
   return true;
 }
 
-// jwt callback branch on the initial Pocket ID login: the token must carry the
-// JobSync user id, not Pocket ID's subject.
-export async function pocketIdJwt(token: JWT, profile: Profile | undefined) {
-  const user = await findUserForPocketId(profile);
-  if (!user) throw new Error("No JobSync user for this Pocket ID login");
+// jwt callback branch on a Pocket ID login: the token must carry the JobSync
+// user bound to this subject, not Pocket ID's subject.
+export async function pocketIdJwt(token: JWT, account: Account) {
+  const user = await findUserBySubject(subjectOf(account));
+  if (!user) throw new Error("Pocket ID subject is not linked to a JobSync user");
   return {
     ...token,
     id: user.id,
