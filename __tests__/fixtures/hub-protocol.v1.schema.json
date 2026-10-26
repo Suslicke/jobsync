@@ -61,9 +61,71 @@
     "ttl_seconds": {
       "type": "integer",
       "minimum": 60
+    },
+    "l10n": {
+      "description": "Optional translations of the (English) base text, keyed by BCP-47 language code (\"ru\"). Arrays align by index with metrics[].label, items[].title, links[].label; null or a missing entry falls back to the base text.",
+      "type": "object",
+      "maxProperties": 8,
+      "propertyNames": {
+        "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{1,8})*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/translation"
+      }
     }
   },
   "$defs": {
+    "translation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "headline": {
+          "type": "string",
+          "maxLength": 280
+        },
+        "metrics": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "links": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40
+          }
+        }
+      }
+    },
     "status": {
       "enum": [
         "ok",
