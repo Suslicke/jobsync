@@ -8,6 +8,7 @@ import prisma from "./lib/db";
 import { getActingUser } from "./lib/mcp/actingUser";
 import {
   POCKET_ID_PROVIDER_ID,
+  clearLinkIntentCookie,
   getPocketIdConfig,
   pocketIdJwt,
   pocketIdProvider,
@@ -40,6 +41,10 @@ const nextAuth = NextAuth({
       }
       return authConfig.callbacks.jwt(params);
     },
+  },
+  events: {
+    // A pending "Connect Pocket ID" must not outlive the session that started it.
+    signOut: () => clearLinkIntentCookie(),
   },
   providers: [
     Credentials({

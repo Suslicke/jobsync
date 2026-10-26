@@ -23,6 +23,8 @@ type Status = Awaited<ReturnType<typeof getPocketIdStatus>>;
 const ERRORS: Record<string, string> = {
   PocketIdAlreadyLinked:
     "That Pocket ID account is already connected to another JobSync user.",
+  PocketIdUserAlreadyLinked:
+    "Your account already has a Pocket ID connected. Disconnect it first.",
   PocketIdNotLinked: "Pocket ID did not return an account id. Try again.",
 };
 

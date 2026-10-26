@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import type { OIDCConfig } from "next-auth/providers";
-import type { JWT } from "next-auth/jwt";
+import { decode, type JWT } from "next-auth/jwt";
 import type { Account, Profile } from "next-auth";
 import prisma from "@/lib/db";
 
@@ -20,6 +20,7 @@ export const POCKET_ID_PROVIDER_ID = "pocket-id";
 // Error codes shown on /signin and in Settings.
 export const POCKET_ID_NOT_LINKED_ERROR = "PocketIdNotLinked";
 export const POCKET_ID_ALREADY_LINKED_ERROR = "PocketIdAlreadyLinked";
+export const POCKET_ID_USER_ALREADY_LINKED_ERROR = "PocketIdUserAlreadyLinked";
 
 // Cookie that marks the next Pocket ID callback as "connect to this user".
 export const POCKET_ID_LINK_COOKIE = "jobsync.pocket-id-link";
@@ -114,6 +115,17 @@ export async function setLinkIntentCookie(userId: string) {
   });
 }
 
+// Called when a plain "Sign in with Pocket ID" starts and on sign-out, so a
+// stale intent can never apply to a later login.
+export async function clearLinkIntentCookie() {
+  try {
+    const store = await cookies();
+    if (store.get(POCKET_ID_LINK_COOKIE)) store.delete(POCKET_ID_LINK_COOKIE);
+  } catch {
+    // Read-only cookie store; the intent still expires on its own.
+  }
+}
+
 async function consumeLinkIntentCookie(): Promise<string | null> {
   const store = await cookies();
   const value = store.get(POCKET_ID_LINK_COOKIE)?.value;
@@ -125,6 +137,43 @@ async function consumeLinkIntentCookie(): Promise<string | null> {
     }
   }
   return verifyLinkIntent(value);
+}
+
+// User id of the Auth.js session cookie on this request, or null. Decoded
+// directly (salt = cookie name) because this runs inside Auth.js's own callback.
+const SESSION_COOKIE_NAMES = [
+  "__Secure-authjs.session-token",
+  "authjs.session-token",
+];
+
+export async function currentSessionUserId(): Promise<string | null> {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
+  const store = await cookies();
+  const all = store.getAll();
+  for (const name of SESSION_COOKIE_NAMES) {
+    // Large sessions are split into "<name>.0", "<name>.1", ...
+    const whole = all.find((c) => c.name === name)?.value;
+    const chunks = all
+      .filter((c) => c.name.startsWith(`${name}.`))
+      .sort(
+        (a, b) =>
+          Number(a.name.slice(name.length + 1)) -
+          Number(b.name.slice(name.length + 1)),
+      )
+      .map((c) => c.value)
+      .join("");
+    const token = whole || chunks;
+    if (!token) continue;
+    try {
+      const payload = await decode({ token, secret, salt: name });
+      const id = (payload?.id as string | undefined) || payload?.sub;
+      if (id) return id;
+    } catch {
+      // Invalid or expired cookie: no session.
+    }
+  }
+  return null;
 }
 
 // ---- bindings
@@ -140,12 +189,14 @@ export async function findUserBySubject(subject: string | undefined | null) {
   return identity?.user ?? null;
 }
 
-// Bind `subject` to `userId`. Refuses a subject already bound to someone else;
-// replaces the user's previous Pocket ID binding, if any.
+// Bind `subject` to `userId`. Never replaces a binding: refuses a subject bound
+// to someone else, and a user who already has a different Pocket ID bound.
 export async function linkSubjectToUser(
   userId: string,
   subject: string,
-): Promise<"linked" | "already-linked-elsewhere" | "no-user"> {
+): Promise<
+  "linked" | "already-linked-elsewhere" | "user-already-linked" | "no-user"
+> {
   const existing = await prisma.oidcIdentity.findUnique({
     where: {
       provider_subject: { provider: POCKET_ID_PROVIDER_ID, subject },
@@ -160,14 +211,10 @@ export async function linkSubjectToUser(
     select: { id: true },
   });
   if (!user) return "no-user";
-  await prisma.$transaction([
-    prisma.oidcIdentity.deleteMany({
-      where: { userId, provider: POCKET_ID_PROVIDER_ID },
-    }),
-    prisma.oidcIdentity.create({
-      data: { userId, provider: POCKET_ID_PROVIDER_ID, subject },
-    }),
-  ]);
+  if (await getPocketIdLinkForUser(userId)) return "user-already-linked";
+  await prisma.oidcIdentity.create({
+    data: { userId, provider: POCKET_ID_PROVIDER_ID, subject },
+  });
   return "linked";
 }
 
@@ -191,25 +238,37 @@ function subjectOf(account: Account | null | undefined): string | null {
   return typeof sub === "string" && sub.length > 0 ? sub : null;
 }
 
-// signIn callback. `linkIntentUserId` is read from the link cookie when omitted.
+// signIn callback. A link intent is honoured only while the request still
+// carries a session of the same user; otherwise it is dropped and this is a
+// plain sign-in by subject. `deps` lets tests skip the cookie reads.
 export async function pocketIdSignIn(
   params: { account?: Account | null; profile?: Profile },
-  linkIntentUserId?: string | null,
+  deps: {
+    linkIntentUserId?: string | null;
+    sessionUserId?: string | null;
+  } = {},
 ): Promise<boolean | string> {
   if (params.account?.provider !== POCKET_ID_PROVIDER_ID) return true;
   const subject = subjectOf(params.account);
   const intentUserId =
-    linkIntentUserId === undefined
+    deps.linkIntentUserId === undefined
       ? await consumeLinkIntentCookie()
-      : linkIntentUserId;
+      : deps.linkIntentUserId;
+  const sessionUserId = intentUserId
+    ? deps.sessionUserId === undefined
+      ? await currentSessionUserId()
+      : deps.sessionUserId
+    : null;
 
-  if (intentUserId) {
-    if (!subject) {
-      return `${POCKET_ID_SETTINGS_PATH}?pocketIdError=${POCKET_ID_NOT_LINKED_ERROR}`;
-    }
+  if (intentUserId && sessionUserId === intentUserId) {
+    const settings = `${POCKET_ID_SETTINGS_PATH}?pocketIdError=`;
+    if (!subject) return settings + POCKET_ID_NOT_LINKED_ERROR;
     const result = await linkSubjectToUser(intentUserId, subject);
     if (result === "linked") return true;
-    return `${POCKET_ID_SETTINGS_PATH}?pocketIdError=${POCKET_ID_ALREADY_LINKED_ERROR}`;
+    if (result === "user-already-linked") {
+      return settings + POCKET_ID_USER_ALREADY_LINKED_ERROR;
+    }
+    return settings + POCKET_ID_ALREADY_LINKED_ERROR;
   }
 
   const user = await findUserBySubject(subject);
