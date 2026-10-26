@@ -3,7 +3,7 @@ import {
   signInWithPocketId,
 } from "@/actions/pocketId.actions";
 import { signIn } from "@/auth";
-import { setLinkIntentCookie } from "@/lib/auth/pocketId";
+import { clearLinkIntentCookie, setLinkIntentCookie } from "@/lib/auth/pocketId";
 import { getCurrentUser } from "@/utils/user.utils";
 
 vi.mock("@/auth", () => ({ signIn: vi.fn(), auth: vi.fn() }));
@@ -12,6 +12,7 @@ vi.mock("@/lib/auth/pocketId", async (orig) => ({
   ...(await orig<typeof import("@/lib/auth/pocketId")>()),
   isPocketIdEnabled: vi.fn(() => true),
   setLinkIntentCookie: vi.fn(),
+  clearLinkIntentCookie: vi.fn(),
 }));
 vi.mock("@/lib/db", () => ({ default: {} }));
 
@@ -39,9 +40,18 @@ describe("Pocket ID actions", () => {
     });
   });
 
-  it("plain sign-in sets no link cookie", async () => {
+  it("plain sign-in clears a stale link intent before starting OIDC", async () => {
+    const order: string[] = [];
+    vi.mocked(clearLinkIntentCookie).mockImplementation(async () => {
+      order.push("clear");
+    });
+    vi.mocked(signIn).mockImplementation(async () => {
+      order.push("signIn");
+    });
+
     await signInWithPocketId();
 
+    expect(order).toEqual(["clear", "signIn"]);
     expect(setLinkIntentCookie).not.toHaveBeenCalled();
     expect(signIn).toHaveBeenCalledWith("pocket-id", { redirectTo: "/dashboard" });
   });

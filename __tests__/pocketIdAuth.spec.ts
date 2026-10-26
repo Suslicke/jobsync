@@ -1,9 +1,13 @@
+// @vitest-environment node
 import {
   POCKET_ID_ALREADY_LINKED_ERROR,
   POCKET_ID_LINK_COOKIE,
   POCKET_ID_NOT_LINKED_ERROR,
   POCKET_ID_PROVIDER_ID,
+  POCKET_ID_USER_ALREADY_LINKED_ERROR,
+  clearLinkIntentCookie,
   createLinkIntent,
+  currentSessionUserId,
   getPocketIdConfig,
   isPocketIdEnabled,
   pocketIdJwt,
@@ -12,9 +16,11 @@ import {
   verifyLinkIntent,
 } from "@/lib/auth/pocketId";
 import prisma from "@/lib/db";
+import { encode } from "next-auth/jwt";
 
 const cookieStore = vi.hoisted(() => ({
   get: vi.fn(),
+  getAll: vi.fn(),
   set: vi.fn(),
   delete: vi.fn(),
 }));
@@ -40,10 +46,26 @@ vi.mock("@/lib/db", () => {
       upsert: vi.fn(),
     },
     oidcIdentity: {
-      findUnique: vi.fn(async ({ where }: { where: { provider_subject: { provider: string; subject: string } } }) => {
-        const { provider, subject } = where.provider_subject;
-        const row = db.identities.find((i) => i.provider === provider && i.subject === subject);
-        return row ? { userId: row.userId, user: userById(row.userId) } : null;
+      findUnique: vi.fn(async ({ where }: {
+        where: {
+          provider_subject?: { provider: string; subject: string };
+          userId_provider?: { userId: string; provider: string };
+        };
+      }) => {
+        const row = where.provider_subject
+          ? db.identities.find(
+              (i) =>
+                i.provider === where.provider_subject!.provider &&
+                i.subject === where.provider_subject!.subject,
+            )
+          : db.identities.find(
+              (i) =>
+                i.userId === where.userId_provider!.userId &&
+                i.provider === where.userId_provider!.provider,
+            );
+        return row
+          ? { userId: row.userId, user: userById(row.userId), createdAt: new Date() }
+          : null;
       }),
       deleteMany: vi.fn(async ({ where }: { where: { userId: string; provider: string } }) => {
         db.identities = db.identities.filter(
@@ -76,11 +98,18 @@ const account = (sub: string) => ({
 });
 
 beforeEach(() => {
-  process.env.AUTH_SECRET = "test-secret-test-secret-test-secret";
+  process.env.AUTH_SECRET = SECRET;
   db.users = [owner, other];
   db.identities = [];
   cookieStore.get.mockReturnValue(undefined);
+  cookieStore.getAll.mockReturnValue([]);
 });
+
+const SECRET = "test-secret-test-secret-test-secret";
+async function sessionCookie(userId: string) {
+  const name = "authjs.session-token";
+  return { name, value: await encode({ token: { id: userId, sub: userId }, secret: SECRET, salt: name }) };
+}
 
 describe("Pocket ID config", () => {
   it("is disabled when no env vars are set", () => {
@@ -114,7 +143,7 @@ describe("Pocket ID sign-in (subject binding)", () => {
         account: account("sub-attacker"),
         profile: { sub: "sub-attacker", email: owner.email, email_verified: true },
       },
-      null,
+      { linkIntentUserId: null },
     );
 
     expect(result).toBe(`/signin?error=${POCKET_ID_NOT_LINKED_ERROR}`);
@@ -131,7 +160,7 @@ describe("Pocket ID sign-in (subject binding)", () => {
 
     const result = await pocketIdSignIn(
       { account: account("sub-2"), profile: { sub: "sub-2", email: owner.email } },
-      null,
+      { linkIntentUserId: null },
     );
     const token = await pocketIdJwt({ sub: "sub-2", email: owner.email }, account("sub-2"));
 
@@ -158,9 +187,11 @@ describe("Pocket ID sign-in (subject binding)", () => {
 });
 
 describe("Connecting Pocket ID (signed-in user only)", () => {
-  it("binds the subject to the user named by a valid link intent", async () => {
+  it("binds the subject when the link cookie and the session name the same user", async () => {
     cookieStore.get.mockReturnValue({ value: createLinkIntent(owner.id) });
+    cookieStore.getAll.mockReturnValue([await sessionCookie(owner.id)]);
 
+    expect(await currentSessionUserId()).toBe(owner.id);
     const result = await pocketIdSignIn({ account: account("sub-1") });
 
     expect(result).toBe(true);
@@ -172,6 +203,35 @@ describe("Connecting Pocket ID (signed-in user only)", () => {
     expect(token).toMatchObject({ id: owner.id });
   });
 
+  it("does not link when the intent has no session (abandoned connect)", async () => {
+    cookieStore.get.mockReturnValue({ value: createLinkIntent(owner.id) });
+    cookieStore.getAll.mockReturnValue([]);
+
+    const result = await pocketIdSignIn({ account: account("sub-attacker") });
+
+    expect(result).toBe(`/signin?error=${POCKET_ID_NOT_LINKED_ERROR}`);
+    expect(cookieStore.delete).toHaveBeenCalledWith(POCKET_ID_LINK_COOKIE);
+    expect(db.identities).toHaveLength(0);
+  });
+
+  it("does not link when the session belongs to a different user", async () => {
+    cookieStore.get.mockReturnValue({ value: createLinkIntent(owner.id) });
+    cookieStore.getAll.mockReturnValue([await sessionCookie(other.id)]);
+
+    const result = await pocketIdSignIn({ account: account("sub-attacker") });
+
+    expect(result).toBe(`/signin?error=${POCKET_ID_NOT_LINKED_ERROR}`);
+    expect(db.identities).toHaveLength(0);
+  });
+
+  it("ignores a session cookie signed with another secret", async () => {
+    const name = "authjs.session-token";
+    const value = await encode({ token: { id: owner.id }, secret: "some-other-secret-value-123456", salt: name });
+    cookieStore.getAll.mockReturnValue([{ name, value }]);
+
+    expect(await currentSessionUserId()).toBeNull();
+  });
+
   it("ignores a forged or expired link intent", async () => {
     const forged = `${owner.id}.${Math.floor(Date.now() / 1000) + 600}.AAAA`;
     expect(verifyLinkIntent(forged)).toBeNull();
@@ -181,6 +241,7 @@ describe("Connecting Pocket ID (signed-in user only)", () => {
     expect(verifyLinkIntent(tampered)).toBeNull();
 
     cookieStore.get.mockReturnValue({ value: forged });
+    cookieStore.getAll.mockReturnValue([await sessionCookie(owner.id)]);
     const result = await pocketIdSignIn({ account: account("sub-1") });
 
     expect(result).toBe(`/signin?error=${POCKET_ID_NOT_LINKED_ERROR}`);
@@ -190,12 +251,37 @@ describe("Connecting Pocket ID (signed-in user only)", () => {
   it("refuses to move a subject that is already bound to another user", async () => {
     db.identities = [{ userId: other.id, provider: POCKET_ID_PROVIDER_ID, subject: "sub-2" }];
 
-    const result = await pocketIdSignIn({ account: account("sub-2") }, owner.id);
+    const result = await pocketIdSignIn(
+      { account: account("sub-2") },
+      { linkIntentUserId: owner.id, sessionUserId: owner.id },
+    );
 
     expect(result).toBe(`/dashboard/settings?pocketIdError=${POCKET_ID_ALREADY_LINKED_ERROR}`);
     expect(db.identities).toEqual([
       { userId: other.id, provider: POCKET_ID_PROVIDER_ID, subject: "sub-2" },
     ]);
+  });
+
+  it("never replaces the user's existing binding", async () => {
+    db.identities = [{ userId: owner.id, provider: POCKET_ID_PROVIDER_ID, subject: "sub-1" }];
+
+    const result = await pocketIdSignIn(
+      { account: account("sub-new") },
+      { linkIntentUserId: owner.id, sessionUserId: owner.id },
+    );
+
+    expect(result).toBe(`/dashboard/settings?pocketIdError=${POCKET_ID_USER_ALREADY_LINKED_ERROR}`);
+    expect(db.identities).toEqual([
+      { userId: owner.id, provider: POCKET_ID_PROVIDER_ID, subject: "sub-1" },
+    ]);
+  });
+
+  it("clearLinkIntentCookie deletes a stale intent", async () => {
+    cookieStore.get.mockReturnValue({ value: createLinkIntent(owner.id) });
+
+    await clearLinkIntentCookie();
+
+    expect(cookieStore.delete).toHaveBeenCalledWith(POCKET_ID_LINK_COOKIE);
   });
 });
 

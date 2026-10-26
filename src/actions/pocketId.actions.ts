@@ -5,6 +5,7 @@ import { requireUser } from "./shared";
 import {
   POCKET_ID_PROVIDER_ID,
   POCKET_ID_SETTINGS_PATH,
+  clearLinkIntentCookie,
   getPocketIdLinkForUser,
   isPocketIdEnabled,
   setLinkIntentCookie,
@@ -23,6 +24,7 @@ function assertEnabled() {
 // so it must not sit in a try/catch.
 export async function signInWithPocketId() {
   assertEnabled();
+  await clearLinkIntentCookie();
   await signIn(POCKET_ID_PROVIDER_ID, { redirectTo: "/dashboard" });
 }
 
