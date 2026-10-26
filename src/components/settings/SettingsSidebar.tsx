@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Bot, Database, Key, Palette, Plug, Target } from "lucide-react";
+import { BarChart3, Bot, Database, Fingerprint, Key, Palette, Plug, Target } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ export type SettingsSection =
   | "appearance"
   | "fit-profile"
   | "mcp-access"
+  | "sign-in"
   | "data";
 
 const SETTINGS_SECTIONS: {
@@ -24,6 +25,7 @@ const SETTINGS_SECTIONS: {
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "fit-profile", label: "Fit Profile", icon: Target },
   { id: "mcp-access", label: "MCP Access", icon: Plug },
+  { id: "sign-in", label: "Sign-in", icon: Fingerprint },
   { id: "data", label: "Data", icon: Database },
 ];
 

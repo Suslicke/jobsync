@@ -37,11 +37,26 @@ model User {
   Tag            Tag[]
   Question       Question[]
   McpAccessToken McpAccessToken[]
+  OidcIdentity   OidcIdentity[]
   Notification   Notification[]
   aiCalls        AiCall[]
   ChatConversation ChatConversation?
   defaultResumeId String?
   defaultResume   Resume?          @relation("UserDefaultResume", fields: [defaultResumeId], references: [id], onDelete: SetNull)
+}
+
+// External OIDC login bound to a user by the provider's subject (never by email).
+// Created only while the user is signed in (Settings -> Sign-in -> Connect).
+model OidcIdentity {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  String
+  subject   String
+  createdAt DateTime @default(now())
+
+  @@unique([provider, subject])
+  @@unique([userId, provider])
 }
 
 model ApiKey {
