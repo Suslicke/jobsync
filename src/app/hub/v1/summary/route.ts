@@ -1,5 +1,5 @@
 import { canReadHubSummary, resolveMcpToken } from "@/lib/mcp/auth";
-import { buildHubSummary } from "@/lib/hub/summary";
+import { buildHubSummary, HUB_TITLE, HUB_TITLE_RU } from "@/lib/hub/summary";
 
 // Admin hub, protocol v1: GET /hub/v1/summary with an MCP access token that
 // carries `hub:read` (or `full`). Counts only, see lib/hub/summary.
@@ -29,8 +29,9 @@ export async function GET(req: Request): Promise<Response> {
         service: "jobsync",
         generated_at: new Date().toISOString(),
         status: "error",
-        title: "Поиск работы",
-        headline: "Не удалось посчитать сводку",
+        title: HUB_TITLE,
+        headline: "Could not compute the summary",
+        l10n: { ru: { title: HUB_TITLE_RU, headline: "Не удалось посчитать сводку" } },
       },
       { headers: NO_STORE },
     );

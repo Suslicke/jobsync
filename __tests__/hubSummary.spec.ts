@@ -41,6 +41,17 @@ const ajv = new Ajv2020({ strict: false, allErrors: true });
 addFormats(ajv);
 const validate = ajv.compile(schema);
 
+/** l10n.ru arrays align by index with the base arrays; no "" translations. */
+function expectL10nAligned(body: any) {
+  const ru = body.l10n.ru;
+  for (const field of ["metrics", "items", "links"]) {
+    const base = body[field] ?? [];
+    const tr = ru[field] ?? [];
+    expect(tr.length, field).toBe(base.length);
+    for (const t of tr) expect(t).not.toBe("");
+  }
+}
+
 // In-memory token table keyed by hash, so revoke (delete) really removes the row.
 let tokens: Map<string, any>;
 
@@ -149,7 +160,7 @@ describe("GET /hub/v1/summary body", () => {
     expect(validate.errors ?? []).toEqual([]);
     expect(ok).toBe(true);
 
-    expect(body).toMatchObject({ protocol: "hub/1", service: "jobsync", status: "ok", title: "Поиск работы" });
+    expect(body).toMatchObject({ protocol: "hub/1", service: "jobsync", status: "ok", title: "Job search" });
     const values = Object.fromEntries(body.metrics.map((m: any) => [m.key, m.value]));
     expect(values).toEqual({
       new_today: 12,
@@ -161,8 +172,42 @@ describe("GET /hub/v1/summary body", () => {
       offer: 0,
       tasks_today: 4,
     });
-    expect(body.headline).toBe("Сегодня 12 новых, 2 откликов, 1 в интервью");
-    expect(body.links).toEqual([{ label: "Открыть", url: "http://localhost:3737/dashboard/myjobs" }]);
+    expect(body.headline).toBe("12 new today, 2 applied, 1 in interviews");
+    expect(body.links).toEqual([{ label: "Open", url: "http://localhost:3737/dashboard/myjobs" }]);
+    expect(body.metrics.map((m: any) => m.label)).toEqual([
+      "New today",
+      "New this week",
+      "Applied today",
+      "Applied this week",
+      "Applied total",
+      "Interviews",
+      "Offers",
+      "Tasks today",
+    ]);
+
+    const ru = body.l10n.ru;
+    expect(ru.title).toBe("Поиск работы");
+    expect(ru.headline).toBe("Сегодня 12 новых, 2 откликов, 1 в интервью");
+    expect(ru.metrics).toEqual([
+      "Новых вакансий",
+      "Новых за неделю",
+      "Откликов",
+      "Откликов за неделю",
+      "Откликов всего",
+      "Интервью",
+      "Офферов",
+      "Задач на сегодня",
+    ]);
+    expect(ru.links).toEqual(["Открыть"]);
+    expectL10nAligned(body);
+  });
+
+  it("the refreshed schema validates l10n (an empty translation is rejected)", async () => {
+    putToken("jsync_hub", ["hub:read"]);
+    const body = await (await get("jsync_hub")).json();
+    expect(validate(body)).toBe(true);
+    body.l10n.ru.metrics[0] = "";
+    expect(validate(body)).toBe(false);
   });
 
   it("only counts: no job rows are read", async () => {
@@ -181,6 +226,8 @@ describe("GET /hub/v1/summary body", () => {
     const body = await res.json();
     expect(validate(body)).toBe(true);
     expect(body.status).toBe("error");
+    expect(body.title).toBe("Job search");
+    expect(body.l10n.ru).toEqual({ title: "Поиск работы", headline: "Не удалось посчитать сводку" });
   });
 });
 

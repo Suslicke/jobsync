@@ -2,8 +2,21 @@ import prisma from "@/lib/db";
 import { APP_CONSTANTS } from "@/lib/constants";
 
 /**
+ * Translation of a summary's text (hub protocol §4). Arrays align by index with
+ * metrics[].label / items[].title / links[].label; null falls back to the base.
+ */
+export type HubTranslation = {
+  title?: string;
+  headline?: string;
+  metrics?: (string | null)[];
+  items?: (string | null)[];
+  links?: (string | null)[];
+};
+
+/**
  * Hub protocol v1 summary (admin hub, GET /hub/v1/summary). Counts only: no
- * company, title or contact names leave the app through this object.
+ * company, title or contact names leave the app through this object. Base text
+ * is English; the Russian translation rides along in `l10n.ru`.
  */
 export type HubSummary = {
   protocol: "hub/1";
@@ -23,7 +36,11 @@ export type HubSummary = {
   }[];
   links?: { label: string; url: string }[];
   ttl_seconds?: number;
+  l10n?: Record<string, HubTranslation>;
 };
+
+export const HUB_TITLE = "Job search";
+export const HUB_TITLE_RU = "Поиск работы";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OPEN_TASK_STATUSES = ["in-progress", "needs-attention"];
@@ -121,33 +138,52 @@ export async function buildHubSummary(
     }),
   ]);
 
-  const headlineParts = [`сегодня ${newToday} новых`, `${appliedToday} откликов`];
-  if (interview > 0) headlineParts.push(`${interview} в интервью`);
-  if (offer > 0) headlineParts.push(`${offer} офферов`);
-  const headline = headlineParts.join(", ");
+  const headlineParts = [`${newToday} new today`, `${appliedToday} applied`];
+  const headlinePartsRu = [`сегодня ${newToday} новых`, `${appliedToday} откликов`];
+  if (interview > 0) {
+    headlineParts.push(`${interview} in interviews`);
+    headlinePartsRu.push(`${interview} в интервью`);
+  }
+  if (offer > 0) {
+    headlineParts.push(`${offer} offers`);
+    headlinePartsRu.push(`${offer} офферов`);
+  }
+  const headlineRu = headlinePartsRu.join(", ");
 
+  // [metric, Russian label] pairs keep l10n.ru.metrics aligned by index.
+  const metrics: [NonNullable<HubSummary["metrics"]>[number], string][] = [
+    [{ key: "new_today", label: "New today", value: newToday, period: "today" }, "Новых вакансий"],
+    [{ key: "new_7d", label: "New this week", value: new7d, period: "7d" }, "Новых за неделю"],
+    [{ key: "applied_today", label: "Applied today", value: appliedToday, period: "today" }, "Откликов"],
+    [{ key: "applied_7d", label: "Applied this week", value: applied7d, period: "7d" }, "Откликов за неделю"],
+    [{ key: "applied_total", label: "Applied total", value: appliedTotal }, "Откликов всего"],
+    [{ key: "interview", label: "Interviews", value: interview }, "Интервью"],
+    [{ key: "offer", label: "Offers", value: offer }, "Офферов"],
+    [{ key: "tasks_today", label: "Tasks today", value: tasksToday, period: "today" }, "Задач на сегодня"],
+  ];
+
+  const ru: HubTranslation = {
+    title: HUB_TITLE_RU,
+    headline: headlineRu.charAt(0).toUpperCase() + headlineRu.slice(1),
+    metrics: metrics.map(([, label]) => label),
+  };
   const summary: HubSummary = {
     protocol: "hub/1",
     service: "jobsync",
     generated_at: now.toISOString(),
     status: "ok",
-    title: "Поиск работы",
-    headline: headline.charAt(0).toUpperCase() + headline.slice(1),
-    metrics: [
-      { key: "new_today", label: "Новых вакансий", value: newToday, period: "today" },
-      { key: "new_7d", label: "Новых за неделю", value: new7d, period: "7d" },
-      { key: "applied_today", label: "Откликов", value: appliedToday, period: "today" },
-      { key: "applied_7d", label: "Откликов за неделю", value: applied7d, period: "7d" },
-      { key: "applied_total", label: "Откликов всего", value: appliedTotal },
-      { key: "interview", label: "Интервью", value: interview },
-      { key: "offer", label: "Офферов", value: offer },
-      { key: "tasks_today", label: "Задач на сегодня", value: tasksToday, period: "today" },
-    ],
+    title: HUB_TITLE,
+    headline: headlineParts.join(", "),
+    metrics: metrics.map(([metric]) => metric),
     ttl_seconds: 900,
+    l10n: { ru },
   };
 
   const link = appLink(opts.appUrl, "/dashboard/myjobs");
-  if (link) summary.links = [{ label: "Открыть", url: link }];
+  if (link) {
+    summary.links = [{ label: "Open", url: link }];
+    ru.links = ["Открыть"];
+  }
   return summary;
 }
 
