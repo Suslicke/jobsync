@@ -6,6 +6,10 @@ import prisma from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { SignupFormSchema } from "@/models/signupForm.schema";
 import {
+  POCKET_ID_PROVIDER_ID,
+  isPocketIdEnabled,
+} from "@/lib/auth/pocketId";
+import {
   CONTACT_ROLES,
   JOB_SOURCES,
   JOB_STAGES,
@@ -109,4 +113,13 @@ export async function authenticate(
     }
     throw error;
   }
+}
+
+// Starts the Pocket ID OIDC login. signIn() throws a redirect to Pocket ID, so
+// it must not sit in a try/catch here.
+export async function signInWithPocketId() {
+  if (!isPocketIdEnabled()) {
+    throw new Error("Pocket ID login is not configured.");
+  }
+  await signIn(POCKET_ID_PROVIDER_ID, { redirectTo: "/dashboard" });
 }

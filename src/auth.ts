@@ -6,6 +6,13 @@ import { authConfig } from "./auth.config";
 import { User } from "./models/user.model";
 import prisma from "./lib/db";
 import { getActingUser } from "./lib/mcp/actingUser";
+import {
+  POCKET_ID_PROVIDER_ID,
+  getPocketIdConfig,
+  pocketIdJwt,
+  pocketIdProvider,
+  pocketIdSignIn,
+} from "./lib/auth/pocketId";
 
 async function getUser(email: string): Promise<User | undefined> {
   try {
@@ -19,8 +26,21 @@ async function getUser(email: string): Promise<User | undefined> {
   }
 }
 
+// Optional SSO login; absent unless POCKET_ID_* env vars are all set.
+const pocketIdConfig = getPocketIdConfig();
+
 const nextAuth = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    signIn: (params) => pocketIdSignIn(params),
+    async jwt(params) {
+      if (params.account?.provider === POCKET_ID_PROVIDER_ID) {
+        return pocketIdJwt(params.token, params.profile);
+      }
+      return authConfig.callbacks.jwt(params);
+    },
+  },
   providers: [
     Credentials({
       async authorize(credentials) {
@@ -39,6 +59,7 @@ const nextAuth = NextAuth({
         return null;
       },
     }),
+    ...(pocketIdConfig ? [pocketIdProvider(pocketIdConfig)] : []),
   ],
 });
 

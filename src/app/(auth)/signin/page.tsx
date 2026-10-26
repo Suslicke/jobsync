@@ -1,10 +1,39 @@
 import { Metadata } from "next";
 import AuthCard from "@/components/auth/AuthCard";
+import {
+  POCKET_ID_NO_ACCOUNT_ERROR,
+  isPocketIdEnabled,
+} from "@/lib/auth/pocketId";
 
 export const metadata: Metadata = {
   title: "Sign In",
 };
 
-export default function Signin() {
-  return <AuthCard mode="signin" />;
+// Pocket ID env is read at request time, not baked in at build time.
+export const dynamic = "force-dynamic";
+
+function pocketIdErrorMessage(error: string | undefined): string | null {
+  if (!error) return null;
+  if (error === POCKET_ID_NO_ACCOUNT_ERROR) {
+    return "No JobSync account uses your Pocket ID email. Sign in with your password, or ask the admin to create the account first.";
+  }
+  return "Sign-in with Pocket ID failed. Try again or use your password.";
+}
+
+export default async function Signin({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string | string[] }>;
+}) {
+  const pocketIdEnabled = isPocketIdEnabled();
+  const { error } = await searchParams;
+  const errorCode = Array.isArray(error) ? error[0] : error;
+
+  return (
+    <AuthCard
+      mode="signin"
+      pocketIdEnabled={pocketIdEnabled}
+      pocketIdError={pocketIdEnabled ? pocketIdErrorMessage(errorCode) : null}
+    />
+  );
 }

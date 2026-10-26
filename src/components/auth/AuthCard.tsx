@@ -3,14 +3,22 @@
 import { useRouter } from "next/navigation";
 import SigninForm from "./SigninForm";
 import SignupForm from "./SignupForm";
+import PocketIdSignIn from "./PocketIdSignIn";
 
 type AuthMode = "signin" | "signup";
 
 interface AuthCardProps {
   mode: AuthMode;
+  // Show "Sign in with Pocket ID" (server decides from env).
+  pocketIdEnabled?: boolean;
+  pocketIdError?: string | null;
 }
 
-export default function AuthCard({ mode }: AuthCardProps) {
+export default function AuthCard({
+  mode,
+  pocketIdEnabled = false,
+  pocketIdError = null,
+}: AuthCardProps) {
   const router = useRouter();
 
   return (
@@ -58,6 +66,7 @@ export default function AuthCard({ mode }: AuthCardProps) {
               </p>
             </div>
             <SigninForm />
+            {pocketIdEnabled && <PocketIdSignIn error={pocketIdError} />}
           </>
         ) : (
           <>
