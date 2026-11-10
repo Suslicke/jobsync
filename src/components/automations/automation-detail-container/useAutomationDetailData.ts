@@ -55,6 +55,11 @@ export function useAutomationDetailData(automationId: string) {
   useEffect(() => {
     sortByRef.current = sortBy;
   }, [sortBy]);
+  // 0 is "any time". A ref and nothing else reads it in fetchJobs, so every
+  // path that loads jobs — refresh, load more, status, sort — keeps the range
+  // without being handed it.
+  const [maxAgeDays, setMaxAgeDays] = useState(0);
+  const maxAgeDaysRef = useRef(maxAgeDays);
   const [loading, setLoading] = useState(true);
 
   const fetchJobs = useCallback(
@@ -65,6 +70,7 @@ export function useAutomationDetailData(automationId: string) {
         page,
         limit: APP_CONSTANTS.RECORDS_PER_PAGE,
         sortBy: sort,
+        maxAgeDays: maxAgeDaysRef.current || undefined,
       }),
     [automationId],
   );
@@ -179,6 +185,22 @@ export function useAutomationDetailData(automationId: string) {
     [fetchJobs, statusFilter],
   );
 
+  const handleMaxAgeDaysChange = useCallback(
+    async (days: number) => {
+      // Set before the fetch, not in an effect: the request below must already
+      // carry the new range.
+      maxAgeDaysRef.current = days;
+      setMaxAgeDays(days);
+      const jobsResult = await fetchJobs(statusFilter);
+      if (jobsResult.success && jobsResult.data) {
+        setJobs(jobsResult.data);
+        setTotalJobs(jobsResult.total ?? 0);
+        setJobsPage(1);
+      }
+    },
+    [fetchJobs, statusFilter],
+  );
+
   const loadMoreRuns = useCallback(async () => {
     setRunsLoadingMore(true);
     try {
@@ -208,6 +230,7 @@ export function useAutomationDetailData(automationId: string) {
     jobStatusCounts,
     statusFilter,
     sortBy,
+    maxAgeDays,
     loading,
     loadData,
     refreshJobs,
@@ -215,5 +238,6 @@ export function useAutomationDetailData(automationId: string) {
     loadMoreRuns,
     handleStatusFilterChange,
     handleSortByChange,
+    handleMaxAgeDaysChange,
   };
 }

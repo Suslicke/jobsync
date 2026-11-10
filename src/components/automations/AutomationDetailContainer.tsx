@@ -53,6 +53,8 @@ export function AutomationDetailContainer({
     loadMoreRuns,
     handleStatusFilterChange,
     handleSortByChange,
+    maxAgeDays,
+    handleMaxAgeDaysChange,
   } = useAutomationDetailData(automationId);
 
   const {
@@ -181,6 +183,8 @@ export function AutomationDetailContainer({
             onStatusFilterChange={handleStatusFilterChange}
             sortBy={sortBy}
             onSortByChange={handleSortByChange}
+            maxAgeDays={maxAgeDays}
+            onMaxAgeDaysChange={handleMaxAgeDaysChange}
             automationId={automationId}
             onRefresh={loadData}
             onViewDetails={handleViewJobDetails}

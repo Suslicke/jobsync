@@ -17,6 +17,7 @@ export {
   getDiscoveredJobById,
   dismissDiscoveredJob,
   clearDiscoveredJobs,
+  dismissOldDiscoveredJobs,
   acceptDiscoveredJob,
 } from "./automation/discoveredJobs";
 

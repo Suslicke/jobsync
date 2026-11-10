@@ -6,6 +6,7 @@ import type { DiscoveredJob } from "@/models/automation.model";
 import {
   acceptDiscoveredJob,
   dismissDiscoveredJob,
+  dismissOldDiscoveredJobs,
   analyzeDiscoveredJob,
 } from "@/actions/automation.actions";
 
@@ -72,5 +73,24 @@ export function useDiscoveredJobActions(
     }
   };
 
-  return { loadingAction, handleAnalyze, handleAccept, handleDismiss };
+  const handleDismissOlderThan = async (automationId: string, days: number) => {
+    // ponytail: native confirm — one bulk action does not earn a dialog
+    // component; swap in AlertDialog if more bulk actions arrive.
+    if (!window.confirm(`Dismiss every new job discovered more than ${days} days ago?`)) return;
+    const result = await dismissOldDiscoveredJobs({ automationId, olderThanDays: days });
+    if (result.success) {
+      toastSuccess(`Dismissed ${result.dismissed ?? 0} job(s).`, "Old jobs dismissed");
+      onRefresh();
+    } else {
+      toastError(result.message);
+    }
+  };
+
+  return {
+    loadingAction,
+    handleAnalyze,
+    handleAccept,
+    handleDismiss,
+    handleDismissOlderThan,
+  };
 }

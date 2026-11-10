@@ -9,6 +9,8 @@ import type {
 import { APP_CONSTANTS } from "@/lib/constants";
 import { formatError } from "./shared";
 
+const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
 // Orders the discovered pile can be read in. Reach is the point of the whole
 // exercise — half the pool arrives through automations, and triaging 400 rows
 // by AI match score is the ranking reachability exists to replace. Nulls last
@@ -27,6 +29,8 @@ export async function getDiscoveredJobs(options?: {
   limit?: number;
   sortBy?: "matchScore" | "discoveredAt" | "reach";
   sortOrder?: "asc" | "desc";
+  /** Only jobs first seen within this many days. Omitted: any age. */
+  maxAgeDays?: number;
 }): Promise<{
   success: boolean;
   data?: DiscoveredJob[];
@@ -44,6 +48,7 @@ export async function getDiscoveredJobs(options?: {
       limit = APP_CONSTANTS.RECORDS_PER_PAGE,
       sortBy = "matchScore",
       sortOrder = "desc",
+      maxAgeDays,
     } = options || {};
 
     const skip = (page - 1) * limit;
@@ -66,6 +71,13 @@ export async function getDiscoveredJobs(options?: {
     // Status counts ignore the discoveryStatus filter so callers get the full
     // per-status breakdown for the whole automation, not just the current page.
     const { discoveryStatus: _omit, ...countWhere } = where;
+
+    // Added after the counts are split off, for the same reason the status
+    // filter is left out of them: the counts describe the whole automation
+    // and decide what the clear dialog offers, whatever is on screen.
+    if (maxAgeDays && maxAgeDays > 0) {
+      where.discoveredAt = { gte: daysAgo(maxAgeDays) };
+    }
 
     const [jobs, total, grouped] = await Promise.all([
       db.job.findMany({
@@ -211,6 +223,40 @@ export async function dismissDiscoveredJob(id: string): Promise<{
   message?: string;
 }> {
   return setDiscoveredJobStatus(id, "dismissed");
+}
+
+// Bulk-dismisses the unreviewed pile past a given age. Dismissed, not deleted:
+// a run recognises a posting by the rows already saved, so a deleted one that
+// is still open on its board comes back on the next run as "new", dated today
+// — the opposite of clearing it out. A dismissed row stays as the memory, and
+// the list leaves dismissed rows out unless asked for them.
+export async function dismissOldDiscoveredJobs(options: {
+  automationId: string;
+  olderThanDays: number;
+}): Promise<{ success: boolean; dismissed?: number; message?: string }> {
+  try {
+    const user = await requireUser();
+
+    const { automationId, olderThanDays } = options;
+    // Without this a zero or a NaN would sweep the whole pile.
+    if (!Number.isFinite(olderThanDays) || olderThanDays < 1) {
+      return { success: false, message: "Age must be at least one day" };
+    }
+
+    const result = await db.job.updateMany({
+      where: {
+        userId: user.id,
+        automationId,
+        discoveryStatus: "new",
+        discoveredAt: { lt: daysAgo(olderThanDays) },
+      },
+      data: { discoveryStatus: "dismissed" },
+    });
+
+    return { success: true, dismissed: result.count };
+  } catch (error) {
+    return formatError(error, "Failed to dismiss old discovered jobs");
+  }
 }
 
 // Bulk-deletes discovered jobs for one automation. Always keeps accepted jobs

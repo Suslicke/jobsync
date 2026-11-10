@@ -2,12 +2,14 @@ import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DiscoveredJobsList } from "@/components/automations/DiscoveredJobsList";
 import type { DiscoveredJob } from "@/models/automation.model";
+import { dismissOldDiscoveredJobs } from "@/actions/automation.actions";
 
 vi.mock("@/actions/automation.actions", () => ({
   acceptDiscoveredJob: vi.fn(),
   dismissDiscoveredJob: vi.fn(),
   analyzeDiscoveredJob: vi.fn(),
   clearDiscoveredJobs: vi.fn(),
+  dismissOldDiscoveredJobs: vi.fn(),
 }));
 
 let intersectionCallback: IntersectionObserverCallback;
@@ -50,6 +52,7 @@ function renderList(
   const onRefresh = vi.fn();
   const onStatusFilterChange = vi.fn();
   const onSortByChange = vi.fn();
+  const onMaxAgeDaysChange = vi.fn();
   const props: React.ComponentProps<typeof DiscoveredJobsList> = {
     jobs: [makeJob()],
     totalJobs: 1,
@@ -62,12 +65,21 @@ function renderList(
     onStatusFilterChange,
     sortBy: "matchScore",
     onSortByChange,
+    maxAgeDays: 0,
+    onMaxAgeDaysChange,
     automationId: "automation-1",
     onRefresh,
     ...overrides,
   };
   const result = render(<DiscoveredJobsList {...props} />);
-  return { ...result, onLoadMore, onRefresh, onStatusFilterChange, onSortByChange };
+  return {
+    ...result,
+    onLoadMore,
+    onRefresh,
+    onStatusFilterChange,
+    onSortByChange,
+    onMaxAgeDaysChange,
+  };
 }
 
 describe("DiscoveredJobsList", () => {
@@ -220,5 +232,34 @@ describe("DiscoveredJobsList", () => {
     );
 
     expect(onStatusFilterChange).toHaveBeenCalledWith(["accepted"]);
+  });
+
+  it("narrows the list to a date range", async () => {
+    const { onMaxAgeDaysChange } = renderList();
+
+    await userEvent.click(screen.getByRole("button", { name: "Any time" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Last 7 days" }));
+
+    expect(onMaxAgeDaysChange).toHaveBeenCalledWith(7);
+  });
+
+  it("dismisses old jobs only after the confirmation, then refreshes", async () => {
+    (dismissOldDiscoveredJobs as any).mockResolvedValue({ success: true, dismissed: 3 });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false);
+    const { onRefresh } = renderList();
+
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss old" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "30 days" }));
+    expect(dismissOldDiscoveredJobs).not.toHaveBeenCalled();
+
+    confirm.mockReturnValueOnce(true);
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss old" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "30 days" }));
+
+    expect(dismissOldDiscoveredJobs).toHaveBeenCalledWith({
+      automationId: "automation-1",
+      olderThanDays: 30,
+    });
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
   });
 });

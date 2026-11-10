@@ -38,6 +38,8 @@ interface DiscoveredJobsListProps {
   onStatusFilterChange: (filter: DiscoveryStatus[]) => void;
   sortBy: DiscoveredSortBy;
   onSortByChange: (sortBy: DiscoveredSortBy) => void;
+  maxAgeDays: number;
+  onMaxAgeDaysChange: (days: number) => void;
   automationId: string;
   onRefresh: () => void;
   onViewDetails?: (job: DiscoveredJob) => void;
@@ -60,6 +62,8 @@ export function DiscoveredJobsList({
   onStatusFilterChange,
   sortBy,
   onSortByChange,
+  maxAgeDays,
+  onMaxAgeDaysChange,
   automationId,
   onRefresh,
   onViewDetails,
@@ -69,8 +73,13 @@ export function DiscoveredJobsList({
   const [clearOpen, setClearOpen] = useState(false);
   const [clearIncludeNew, setClearIncludeNew] = useState(false);
 
-  const { loadingAction, handleAnalyze, handleAccept, handleDismiss } =
-    useDiscoveredJobActions(onRefresh, onBusyChange);
+  const {
+    loadingAction,
+    handleAnalyze,
+    handleAccept,
+    handleDismiss,
+    handleDismissOlderThan,
+  } = useDiscoveredJobActions(onRefresh, onBusyChange);
 
   const sentinelRef = useJobsInfiniteScroll(
     jobs.length,
@@ -126,6 +135,10 @@ export function DiscoveredJobsList({
         onStatusFilterChange={onStatusFilterChange}
         sortBy={sortBy}
         onSortByChange={onSortByChange}
+        maxAgeDays={maxAgeDays}
+        onMaxAgeDaysChange={onMaxAgeDaysChange}
+        newCount={newCount}
+        onDismissOlderThan={(days) => handleDismissOlderThan(automationId, days)}
       />
       <CardContent>
         {jobs.length === 0 ? (
@@ -133,7 +146,7 @@ export function DiscoveredJobsList({
             <Briefcase className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium">No jobs match this filter</h3>
             <p className="text-muted-foreground mt-2">
-              Try selecting a different status above.
+              Try a different status or a wider date range above.
             </p>
           </div>
         ) : (
