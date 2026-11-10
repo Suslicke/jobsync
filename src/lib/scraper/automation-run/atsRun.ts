@@ -21,6 +21,9 @@ import { parseBoardConfig, targetCount, type BoardRunConfig } from "./config";
 import { extractResumeSkills } from "./resumeText";
 import { buildSkillTerms } from "./skillTags";
 import { persistDiscoveredJob, scalePrerank } from "./persist";
+import { CEILING_CLOSED, parseFitData } from "@/lib/fit";
+import { buildFitData } from "@/lib/fit/store";
+import { normalizeWorkplaceType } from "../mapper";
 import { matchJobToResume } from "./match";
 import { finalizeRun } from "./finalize";
 
@@ -507,6 +510,30 @@ export async function runAtsRun(
       };
 
       if (aiError) {
+        await saveUnanalyzed();
+        return;
+      }
+
+      // Nothing the model says can lift a posting past its ceiling, so one the
+      // analysis has already closed — an office with no way to get there — is
+      // saved as it stands, blocker and all, without a model call. Saved
+      // rather than dropped: a row that vanished would come back as "new" on
+      // every run and take a top-K slot from a posting that can be taken.
+      const fit = parseFitData(
+        await buildFitData(automation.userId, {
+          title: scored.job.title,
+          description: scored.job.description,
+          location: scored.job.location,
+          workplaceType:
+            scored.job.workplaceType ?? normalizeWorkplaceType(scored.job.isRemote),
+        }),
+      );
+      if (fit && fit.ceiling <= CEILING_CLOSED) {
+        automationLogger.log(
+          automation.id,
+          "info",
+          `${label} Not analyzed: ${scored.job.title} at ${scored.job.company} — ${fit.blockers.join("; ")}`,
+        );
         await saveUnanalyzed();
         return;
       }

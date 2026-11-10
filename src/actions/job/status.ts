@@ -7,6 +7,7 @@ import { requireUser } from "../shared";
 import { appendStatusStage } from "./shared";
 import { jobFieldsForStage } from "../jobStage/shared";
 import { resolveStageTypeForStatusId } from "@/lib/jobs/resolve";
+import { enforceMatchCeiling } from "@/lib/fit/store";
 
 export const updateJobStatus = async (
   jobId: string,
@@ -61,6 +62,7 @@ export const saveJobMatchResult = async (
       where: { id: jobId, userId: user.id },
       data: { matchScore, matchData },
     });
+    await enforceMatchCeiling(jobId);
 
     return { success: true };
   } catch (error) {

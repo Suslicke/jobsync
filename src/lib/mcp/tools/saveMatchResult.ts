@@ -4,6 +4,7 @@ import { APP_CONSTANTS } from "@/lib/constants";
 import { McpSaveMatchResultSchema } from "@/models/mcp.schema";
 import { checkMcpRateLimit } from "@/lib/mcp/rate-limit";
 import { parseJobMatch } from "@/lib/ai/jobMatch/parse";
+import { enforceMatchCeiling } from "@/lib/fit/store";
 import type { JobMatchData } from "@/models/ai.schemas";
 import type { DescriptionCompleteness } from "@/models/job.model";
 
@@ -95,6 +96,7 @@ export async function handleSaveMatchResult(
         matchData: JSON.stringify(matchData),
       },
     });
+    await enforceMatchCeiling(input.jobId);
   } catch (error: any) {
     if (error?.code === "P2025") {
       return {

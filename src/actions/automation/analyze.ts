@@ -25,6 +25,7 @@ import {
   withSpan,
 } from "@/lib/telemetry";
 import { formatError } from "./shared";
+import { enforceMatchCeiling } from "@/lib/fit/store";
 
 // Runs an on-demand LLM match for an un-analyzed discovered job using the
 // resume tied to its automation and the user's AI settings (no model picker —
@@ -173,6 +174,7 @@ export async function analyzeDiscoveredJob(jobId: string): Promise<{
       where: { id: jobId, userId: user.id },
       data: { matchScore: scores.matchScore, matchData },
     });
+    await enforceMatchCeiling(jobId);
 
     return { success: true, matchScore: scores.matchScore };
   } catch (error) {

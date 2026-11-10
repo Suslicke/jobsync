@@ -107,6 +107,31 @@ export function FitBadges({
           </Tooltip>
         )}
 
+        {/* Why the AI match stops short of the top band when no blocker says
+            so: an office that would move you, or a posting that never says
+            where the work is done. An office with no way there is a blocker
+            and is shown with the rest of them below. */}
+        {fit.ceiling != null &&
+          fit.ceiling < 100 &&
+          !fit.blockers.some((b) => b.endsWith("no relocation")) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className="h-5 px-1.5 py-0 text-[11px] font-normal border-amber-500/60 text-amber-700 dark:text-amber-400"
+                >
+                  {fit.workplace
+                    ? `${fit.workplace === "hybrid" ? "hybrid" : "on-site"}, relocation`
+                    : "workplace not stated"}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                AI match is held at {fit.ceiling}%: only a posting that says it
+                is remote can score higher.
+              </TooltipContent>
+            </Tooltip>
+          )}
+
         {/* An off-role title arrives as a blocker. "Unclear" is not a blocker —
             it is a posting whose title named nothing either way, and it is
             shown so it can be opened rather than trusted. */}

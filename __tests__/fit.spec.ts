@@ -19,6 +19,8 @@ import {
   isFitStale,
   DEFAULT_PROFILE,
   mergeProfile,
+  workplace,
+  ceilMatch,
 } from "@/lib/fit";
 
 describe("stack", () => {
@@ -324,5 +326,124 @@ describe("analyseJob", () => {
     });
     const fit = stackFit("Golang services with Postgres, Redis, Docker", goShop);
     expect(fit.pct!).toBeGreaterThan(90);
+  });
+});
+
+// "Senior Python Developer, on-site in Kochi" scored 91%: the skills matched
+// and nothing asked whether the job could be taken. Each case is a real row.
+describe("workplace", () => {
+  const at = (description: string, location = "", workplaceType: string | null = null) =>
+    workplace({ description, location, workplaceType });
+
+  it("trusts the collector's field, then the label, then the text", () => {
+    expect(at("Hybrid, three days in the office", "London", "REMOTE")).toBe("remote");
+    expect(at("", "гибрид или офис (Москва)")).toBe("hybrid");
+    expect(at("", "London, UK (Hybrid)")).toBe("hybrid");
+    expect(at("", "можно удалённо")).toBe("remote");
+    expect(at("Work Mode: Onsite (3x/week)", "Montreal, Quebec, Canada")).toBe("onsite");
+  });
+
+  it("reads hybrid from days counted either way", () => {
+    expect(at("with the expectation of being in the office three days per week")).toBe("hybrid");
+    expect(at("flexibility to work from home 3 days/week")).toBe("hybrid");
+    expect(at("График работы 5/2, гибрид; комфортный офис")).toBe("hybrid");
+  });
+
+  it("does not take a technology for an arrangement", () => {
+    expect(at("vector databases, semantic or hybrid search, embeddings")).toBeNull();
+    expect(at("experience with hybrid cloud deployments")).toBeNull();
+  });
+
+  it("counts remote only when the role is said to be", () => {
+    expect(at("The role is fully remote. We meet on-site twice a year.")).toBe("remote");
+    expect(at("Location: Canada (Remote)")).toBe("remote");
+    expect(at("Формат работы: удалённо")).toBe("remote");
+    // The word alone describes an interview, a perk, a scam warning.
+    expect(at("individuals post fake remote job openings in our name")).toBeNull();
+    expect(at("Interview process: remote pair programming")).toBeNull();
+  });
+
+  it("leaves a choice between the two unanswered", () => {
+    expect(at("Hybrid work in London office, or remote in wider UK and Europe")).toBeNull();
+    expect(at("flexible working, including hybrid and remote options")).toBeNull();
+    // Opposite jobs, same two words: neither is guessed.
+    expect(at("a balance between onsite and remote work")).toBeNull();
+  });
+
+  it("says nothing about a posting that says nothing", () => {
+    expect(at("Python, Django, PostgreSQL. Five years of experience.", "Sheffield, England")).toBeNull();
+  });
+});
+
+describe("workplace as a blocker and a ceiling", () => {
+  const job = (description: string, location = "", workplaceType: string | null = null) =>
+    analyseJob({ title: "Senior Python Developer", description, location, workplaceType });
+
+  it("blocks an office that offers no way to get there", () => {
+    const f = job("Python, FastAPI, PostgreSQL, Docker. Hybrid, 3 days in the office.", "Kochi, India");
+    expect(f.workplace).toBe("hybrid");
+    expect(f.blockers).toContain("hybrid, no relocation");
+    expect(f.ceiling).toBe(49);
+  });
+
+  it("keeps an office that sponsors a visa, as second choice", () => {
+    const f = job("On-site in Toronto. We offer visa sponsorship and a relocation package.", "Toronto");
+    expect(f.blockers).not.toContain("on-site, no relocation");
+    expect(f.ceiling).toBe(79);
+  });
+
+  it("gives the top band only to a posting that says it is remote", () => {
+    expect(job("Python, Django.", "Remote, Europe").ceiling).toBe(100);
+    // Silence is not an office, but it has not earned "strong" either.
+    const silent = job("Python, Django, PostgreSQL.", "Sheffield, England");
+    expect(silent.blockers).toEqual([]);
+    expect(silent.ceiling).toBe(79);
+  });
+
+  it("is switched off by the profile", () => {
+    const f = analyseJob(
+      { title: "Python Developer", description: "On-site only.", location: "Kochi" },
+      mergeProfile({ remoteOnly: false }),
+    );
+    expect(f.blockers).toEqual([]);
+    expect(f.ceiling).toBe(100);
+  });
+});
+
+describe("ceilMatch", () => {
+  const data = (o: object) => JSON.stringify(o);
+
+  it("holds a score to the ceiling and keeps what the model gave", () => {
+    const out = ceilMatch(91, data({ matchScore: 91, recommendation: "strong match", analyzed: true }), 49)!;
+    expect(out.matchScore).toBe(49);
+    expect(JSON.parse(out.matchData)).toMatchObject({
+      matchScore: 49,
+      skillsScore: 91,
+      recommendation: "weak match",
+      analyzed: true,
+    });
+  });
+
+  it("is idempotent", () => {
+    const once = ceilMatch(91, data({ matchScore: 91 }), 79)!;
+    expect(ceilMatch(once.matchScore, once.matchData, 79)).toBeNull();
+    expect(ceilMatch(60, data({ matchScore: 60 }), 79)).toBeNull();
+  });
+
+  it("lifts again when the ceiling does", () => {
+    const held = ceilMatch(91, data({ matchScore: 91 }), 49)!;
+    const lifted = ceilMatch(held.matchScore, held.matchData, 100)!;
+    expect(lifted.matchScore).toBe(91);
+    expect(JSON.parse(lifted.matchData)).toEqual({ matchScore: 91, recommendation: "strong match" });
+  });
+
+  it("takes a fresh score over a remembered one", () => {
+    // A re-analysis overwrites matchData whole, so no skillsScore survives it.
+    expect(ceilMatch(70, data({ matchScore: 70 }), 49)!.matchScore).toBe(49);
+  });
+
+  it("leaves a pre-rank alone: it is a sort key, not an AI score", () => {
+    expect(ceilMatch(88, data({ analyzed: false, prerankScore: 1.2 }), 49)).toBeNull();
+    expect(ceilMatch(null, null, 49)).toBeNull();
   });
 });

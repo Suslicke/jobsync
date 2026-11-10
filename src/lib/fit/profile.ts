@@ -36,6 +36,12 @@ export type FitProfile = {
   skipRoles: Record<SkipGroup, string[]>;
   /** Programming languages the person does not write, with their patterns. */
   foreignStacks: { name: string; pattern: string }[];
+  /**
+   * The person works remotely. An office (hybrid or on-site) is then a blocker
+   * unless the posting offers relocation or a visa, and only a posting that
+   * says it is remote can reach the top band of the AI match.
+   */
+  remoteOnly: boolean;
 };
 
 // Tier weights. Matching a core term says more than matching a supporting one,
@@ -243,6 +249,7 @@ export const DEFAULT_PROFILE: FitProfile = {
     { name: "Magento", pattern: "\\bmagento\\b" },
     { name: "Sitecore", pattern: "\\bsitecore\\b|\\btypo3\\b|\\bumbraco\\b|\\bliferay\\b" },
   ],
+  remoteOnly: true,
 };
 
 /** Settings hold a partial profile; missing keys fall back to the default. */

@@ -14,11 +14,13 @@ import {
 import { discipline, primaryLanguage, stackFit } from "./stack";
 import { outOfReach } from "./experience";
 import { foreignStack, needLanguage, roleFit } from "./roles";
+import { matchCeiling, workplace, type Workplace } from "./workplace";
 
 export * from "./profile";
 export * from "./stack";
 export * from "./experience";
 export * from "./roles";
+export * from "./workplace";
 
 // Visa sponsorship and relocation help are DIFFERENT things. "Relocation
 // assistance" means "we pay to move your boxes", not "we will get you a work
@@ -93,6 +95,10 @@ export type FitData = {
   relocation: boolean;
   /** Remote, but only from inside the United States. See `usOnlyRemote`. */
   usOnlyRemote: boolean;
+  /** Remote, hybrid, on-site; null when the posting does not say. */
+  workplace: Workplace | null;
+  /** The most an AI match may show for this posting. See `matchCeiling`. */
+  ceiling: number;
   /** Every reason this is not the person's job, named out loud. */
   blockers: string[];
 };
@@ -103,7 +109,7 @@ export type FitData = {
  * changed while the description did not. Bump this and every cached analysis
  * expires by itself.
  */
-export const FIT_RULES_VERSION = 7;
+export const FIT_RULES_VERSION = 8;
 
 /** Analysis of one posting. Pure: same input, same record. */
 export function analyseJob(
@@ -111,7 +117,14 @@ export function analyseJob(
     title = "",
     description = "",
     location = "",
-  }: { title?: string; description?: string; location?: string | null },
+    workplaceType = null,
+  }: {
+    title?: string;
+    description?: string;
+    location?: string | null;
+    /** The collector's own REMOTE / HYBRID / ONSITE, when it gave one. */
+    workplaceType?: string | null;
+  },
   profile: FitProfile = DEFAULT_PROFILE,
 ): FitData {
   const desc = cleanText(description);
@@ -144,6 +157,16 @@ export function analyseJob(
   if (usRemote) blockers.push("US-only remote");
 
   const sponsor = sponsorship(desc);
+  const moves = relocation(desc);
+  // An office is a blocker only for someone who asked for remote work, and
+  // only when the posting offers no way to get there. Sponsorship or a
+  // relocation package turns it from "closed" into "second choice": no
+  // blocker, but `ceiling` still keeps it out of the top band.
+  const place = workplace({ workplaceType, location, description: desc });
+  const moveOffered = sponsor === "yes" || moves;
+  if (profile.remoteOnly && place && place !== "remote" && !moveOffered)
+    blockers.push(`${place === "hybrid" ? "hybrid" : "on-site"}, no relocation`);
+
   return {
     v: FIT_RULES_VERSION,
     len: desc.length,
@@ -162,8 +185,10 @@ export function analyseJob(
     primary: primary ? primary.name : null,
     visaSponsorship: sponsor === "yes",
     visaRefused: sponsor === "no",
-    relocation: relocation(desc),
+    relocation: moves,
     usOnlyRemote: usRemote,
+    workplace: place,
+    ceiling: matchCeiling(place, moveOffered, profile.remoteOnly),
     blockers,
   };
 }

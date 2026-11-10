@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { ceilMatch, parseFitData } from "@/lib/fit";
 import { buildFitData, buildInitialReach } from "@/lib/fit/store";
 import { APP_CONSTANTS } from "@/lib/constants";
 import type { Automation, ScrapedJobData } from "@/models/automation.model";
@@ -59,7 +60,15 @@ export async function persistDiscoveredJob(
     title: job.title,
     description: job.description,
     location: job.location,
+    workplaceType: jobRecord.workplaceType,
   });
+  // The run decides what to save on the score the model gave; what the list
+  // shows is that score held to what the posting says about place.
+  const held = ceilMatch(
+    jobRecord.matchScore,
+    jobRecord.matchData,
+    parseFitData(fitData)?.ceiling,
+  );
 
   const reach = await buildInitialReach(automation.userId, {
     fitData,
@@ -74,7 +83,9 @@ export async function persistDiscoveredJob(
   );
 
   try {
-    await db.job.create({ data: { ...jobRecord, fitData, ...reach, stages } });
+    await db.job.create({
+      data: { ...jobRecord, ...held, fitData, ...reach, stages },
+    });
     return { saved: true, tagsApplied: jobRecord.tags?.connect.length ?? 0 };
   } catch (err: any) {
     if (err?.code === "P2002") return { saved: false, tagsApplied: 0 };

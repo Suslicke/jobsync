@@ -85,6 +85,7 @@ export async function createJobRecord(fields: {
     title: label,
     description: rest.description,
     location: locationLabel,
+    workplaceType: rest.workplaceType,
   });
   const reach = await buildInitialReach(rest.userId, { fitData, title: label });
   const createdAt = new Date();

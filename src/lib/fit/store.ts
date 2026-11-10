@@ -2,6 +2,7 @@ import "server-only";
 import prisma from "@/lib/db";
 import {
   analyseJob,
+  ceilMatch,
   fingerprint,
   isFitStale,
   mergeProfile,
@@ -34,6 +35,7 @@ export async function buildFitData(
     description?: string | null;
     /** Location label, not id: the US-only-remote rule reads the words. */
     location?: string | null;
+    workplaceType?: string | null;
   },
 ): Promise<string> {
   const profile = await getFitProfile(userId);
@@ -43,10 +45,27 @@ export async function buildFitData(
         title: job.title ?? "",
         description: job.description ?? "",
         location: job.location ?? "",
+        workplaceType: job.workplaceType,
       },
       profile,
     ),
   );
+}
+
+/**
+ * Hold a job's stored AI score to the ceiling its analysis sets. Called after
+ * anything writes a score; the analysis passes below do the same in the write
+ * they already make. Five places save a match, and a rule repeated in five
+ * places is a rule that holds in four.
+ */
+export async function enforceMatchCeiling(jobId: string): Promise<void> {
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { matchScore: true, matchData: true, fitData: true },
+  });
+  if (!job) return;
+  const held = ceilMatch(job.matchScore, job.matchData, parseFitData(job.fitData)?.ceiling);
+  if (held) await prisma.job.update({ where: { id: jobId }, data: held });
 }
 
 /**
@@ -60,6 +79,9 @@ export async function refreshJobFit(jobId: string): Promise<void> {
       id: true,
       userId: true,
       description: true,
+      workplaceType: true,
+      matchScore: true,
+      matchData: true,
       JobTitle: { select: { label: true } },
       Location: { select: { label: true } },
     },
@@ -69,8 +91,12 @@ export async function refreshJobFit(jobId: string): Promise<void> {
     title: job.JobTitle?.label,
     description: job.description,
     location: job.Location?.label,
+    workplaceType: job.workplaceType,
   });
-  await prisma.job.update({ where: { id: job.id }, data: { fitData } });
+  // A fuller description may be the one that finally says "remote" — or
+  // "three days in the office" — so the score moves with the analysis.
+  const held = ceilMatch(job.matchScore, job.matchData, parseFitData(fitData)?.ceiling);
+  await prisma.job.update({ where: { id: job.id }, data: { fitData, ...held } });
   // Reachability is built on the analysis, so it cannot outlive it: a fuller
   // description moves the stack share and may clear or add a blocker.
   await refreshJobReach(jobId);
@@ -251,6 +277,9 @@ export async function refreshStaleFits(userId: string, batchSize = 200): Promise
         id: true,
         description: true,
         fitData: true,
+        workplaceType: true,
+        matchScore: true,
+        matchData: true,
         JobTitle: { select: { label: true } },
         Location: { select: { label: true } },
       },
@@ -262,17 +291,20 @@ export async function refreshStaleFits(userId: string, batchSize = 200): Promise
     cursor = jobs[jobs.length - 1].id;
     for (const job of jobs) {
       if (!isFitStale(parseFitData(job.fitData), job.description, profile)) continue;
-      const fitData = JSON.stringify(
-        analyseJob(
-          {
-            title: job.JobTitle?.label ?? "",
-            description: job.description,
-            location: job.Location?.label ?? "",
-          },
-          profile,
-        ),
+      const fit = analyseJob(
+        {
+          title: job.JobTitle?.label ?? "",
+          description: job.description,
+          location: job.Location?.label ?? "",
+          workplaceType: job.workplaceType,
+        },
+        profile,
       );
-      await prisma.job.update({ where: { id: job.id }, data: { fitData } });
+      const held = ceilMatch(job.matchScore, job.matchData, fit.ceiling);
+      await prisma.job.update({
+        where: { id: job.id },
+        data: { fitData: JSON.stringify(fit), ...held },
+      });
       done++;
     }
   }

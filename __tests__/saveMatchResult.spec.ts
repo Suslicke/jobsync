@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 vi.mock("@prisma/client", () => {
   const mPrismaClient = {
-    job: { update: vi.fn(), findFirst: vi.fn() },
+    job: { update: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
     resume: { findFirst: vi.fn() },
   };
@@ -33,6 +33,33 @@ describe("handleSaveMatchResult", () => {
     (prisma.job.update as any).mockResolvedValue({ id: "job-1" });
     (prisma.job.findFirst as any).mockResolvedValue({
       descriptionCompleteness: "full",
+    });
+    // The ceiling pass reads the row back; null means "nothing to hold".
+    (prisma.job.findUnique as any).mockResolvedValue(null);
+  });
+
+  it("holds the saved score to the ceiling the job's analysis sets", async () => {
+    // What the save just wrote, read back beside an analysis that closed the
+    // posting: an office, no relocation.
+    (prisma.job.findUnique as any).mockResolvedValue({
+      matchScore: 78,
+      matchData: JSON.stringify({ matchScore: 78, analyzed: true }),
+      fitData: JSON.stringify({ ceiling: 49 }),
+    });
+
+    await handleSaveMatchResult(
+      { jobId: "job-1", matchText: validMatchText },
+      "user-1",
+      "my-token",
+    );
+
+    const held = (prisma.job.update as any).mock.calls.at(-1)[0];
+    expect(held.where).toEqual({ id: "job-1" });
+    expect(held.data.matchScore).toBe(49);
+    expect(JSON.parse(held.data.matchData)).toMatchObject({
+      matchScore: 49,
+      skillsScore: 78,
+      recommendation: "weak match",
     });
   });
 
