@@ -7,6 +7,7 @@ import {
   acceptDiscoveredJob,
   dismissDiscoveredJob,
   dismissOldDiscoveredJobs,
+  setDiscoveredJobsStatus,
   analyzeDiscoveredJob,
 } from "@/actions/automation.actions";
 
@@ -73,10 +74,35 @@ export function useDiscoveredJobActions(
     }
   };
 
-  const handleDismissOlderThan = async (automationId: string, days: number) => {
-    // ponytail: native confirm — one bulk action does not earn a dialog
-    // component; swap in AlertDialog if more bulk actions arrive.
-    if (!window.confirm(`Dismiss every new job discovered more than ${days} days ago?`)) return;
+  const handleBulkStatus = async (
+    ids: string[],
+    status: "accepted" | "dismissed",
+  ) => {
+    const result = await setDiscoveredJobsStatus({ ids, status });
+    if (result.success) {
+      toastSuccess(
+        `${result.updated ?? 0} job(s) ${status}.`,
+        status === "accepted" ? "Jobs accepted" : "Jobs dismissed",
+      );
+      onRefresh();
+    } else {
+      toastError(result.message);
+    }
+  };
+
+  const handleDismissOlderThan = async (
+    automationId: string | undefined,
+    days: number,
+  ) => {
+    // ponytail: native confirm — one sweeping action does not earn a dialog
+    // component; swap in AlertDialog if more of them arrive.
+    const where = automationId ? "" : " in every automation";
+    if (
+      !window.confirm(
+        `Dismiss every new job discovered more than ${days} days ago${where}?`,
+      )
+    )
+      return;
     const result = await dismissOldDiscoveredJobs({ automationId, olderThanDays: days });
     if (result.success) {
       toastSuccess(`Dismissed ${result.dismissed ?? 0} job(s).`, "Old jobs dismissed");
@@ -91,6 +117,7 @@ export function useDiscoveredJobActions(
     handleAnalyze,
     handleAccept,
     handleDismiss,
+    handleBulkStatus,
     handleDismissOlderThan,
   };
 }

@@ -18,6 +18,7 @@ export {
   dismissDiscoveredJob,
   clearDiscoveredJobs,
   dismissOldDiscoveredJobs,
+  setDiscoveredJobsStatus,
   acceptDiscoveredJob,
 } from "./automation/discoveredJobs";
 

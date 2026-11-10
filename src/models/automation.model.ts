@@ -16,6 +16,18 @@ export type DiscoveryStatus = "new" | "accepted" | "dismissed";
 // Order the discovered pile is read in. The server applies it across every
 // page, so the choice belongs to the query, not to the loaded slice.
 export type DiscoveredSortBy = "matchScore" | "reach" | "discoveredAt";
+// Narrowing filters over the stored analysis; all that are named must hold.
+export type DiscoveredOnly = "remote" | "clear" | "scored" | "visa";
+// Everything that decides which discovered jobs a list shows.
+export type DiscoveredQuery = {
+  statusFilter: DiscoveryStatus[];
+  sortBy: DiscoveredSortBy;
+  /** Days since first seen; 0 is any time. */
+  maxAgeDays: number;
+  only: DiscoveredOnly[];
+  /** The combined list narrowed to one automation; unset means all of them. */
+  automationId?: string;
+};
 // Every board is declared once, in the scraper's board table; JobBoard and the
 // scheduler's board list are derived from it rather than retyped here.
 export type { JobBoard };

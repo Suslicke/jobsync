@@ -2,7 +2,10 @@ import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DiscoveredJobsList } from "@/components/automations/DiscoveredJobsList";
 import type { DiscoveredJob } from "@/models/automation.model";
-import { dismissOldDiscoveredJobs } from "@/actions/automation.actions";
+import {
+  dismissOldDiscoveredJobs,
+  setDiscoveredJobsStatus,
+} from "@/actions/automation.actions";
 
 vi.mock("@/actions/automation.actions", () => ({
   acceptDiscoveredJob: vi.fn(),
@@ -10,6 +13,7 @@ vi.mock("@/actions/automation.actions", () => ({
   analyzeDiscoveredJob: vi.fn(),
   clearDiscoveredJobs: vi.fn(),
   dismissOldDiscoveredJobs: vi.fn(),
+  setDiscoveredJobsStatus: vi.fn(),
 }));
 
 let intersectionCallback: IntersectionObserverCallback;
@@ -50,9 +54,7 @@ function renderList(
 ) {
   const onLoadMore = vi.fn();
   const onRefresh = vi.fn();
-  const onStatusFilterChange = vi.fn();
-  const onSortByChange = vi.fn();
-  const onMaxAgeDaysChange = vi.fn();
+  const onQueryChange = vi.fn();
   const props: React.ComponentProps<typeof DiscoveredJobsList> = {
     jobs: [makeJob()],
     totalJobs: 1,
@@ -61,12 +63,13 @@ function renderList(
     dismissedCount: 0,
     newCount: 1,
     acceptedCount: 0,
-    statusFilter: ["new", "accepted"],
-    onStatusFilterChange,
-    sortBy: "matchScore",
-    onSortByChange,
-    maxAgeDays: 0,
-    onMaxAgeDaysChange,
+    query: {
+      statusFilter: ["new", "accepted"],
+      sortBy: "matchScore",
+      maxAgeDays: 0,
+      only: [],
+    },
+    onQueryChange,
     automationId: "automation-1",
     onRefresh,
     ...overrides,
@@ -76,9 +79,7 @@ function renderList(
     ...result,
     onLoadMore,
     onRefresh,
-    onStatusFilterChange,
-    onSortByChange,
-    onMaxAgeDaysChange,
+    onQueryChange,
   };
 }
 
@@ -181,7 +182,6 @@ describe("DiscoveredJobsList", () => {
       dismissedCount: 3,
       newCount: 0,
       acceptedCount: 0,
-      statusFilter: ["new", "accepted"],
     });
 
     expect(screen.getByText("No jobs match this filter")).toBeInTheDocument();
@@ -189,7 +189,7 @@ describe("DiscoveredJobsList", () => {
   });
 
   it("checks New and Accepted but not Dismissed by default", async () => {
-    renderList({ statusFilter: ["new", "accepted"] });
+    renderList();
 
     await userEvent.click(screen.getByRole("button", { name: "Status" }));
 
@@ -205,42 +205,36 @@ describe("DiscoveredJobsList", () => {
   });
 
   it("adds Dismissed to the filter when checked", async () => {
-    const { onStatusFilterChange } = renderList({
-      statusFilter: ["new", "accepted"],
-    });
+    const { onQueryChange } = renderList();
 
     await userEvent.click(screen.getByRole("button", { name: "Status" }));
     await userEvent.click(
       screen.getByRole("menuitemcheckbox", { name: "Dismissed" }),
     );
 
-    expect(onStatusFilterChange).toHaveBeenCalledWith([
-      "new",
-      "accepted",
-      "dismissed",
-    ]);
+    expect(onQueryChange).toHaveBeenCalledWith({
+      statusFilter: ["new", "accepted", "dismissed"],
+    });
   });
 
   it("removes New from the filter when unchecked", async () => {
-    const { onStatusFilterChange } = renderList({
-      statusFilter: ["new", "accepted"],
-    });
+    const { onQueryChange } = renderList();
 
     await userEvent.click(screen.getByRole("button", { name: "Status" }));
     await userEvent.click(
       screen.getByRole("menuitemcheckbox", { name: "New" }),
     );
 
-    expect(onStatusFilterChange).toHaveBeenCalledWith(["accepted"]);
+    expect(onQueryChange).toHaveBeenCalledWith({ statusFilter: ["accepted"] });
   });
 
   it("narrows the list to a date range", async () => {
-    const { onMaxAgeDaysChange } = renderList();
+    const { onQueryChange } = renderList();
 
     await userEvent.click(screen.getByRole("button", { name: "Any time" }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: "Last 7 days" }));
 
-    expect(onMaxAgeDaysChange).toHaveBeenCalledWith(7);
+    expect(onQueryChange).toHaveBeenCalledWith({ maxAgeDays: 7 });
   });
 
   it("dismisses old jobs only after the confirmation, then refreshes", async () => {
@@ -261,5 +255,59 @@ describe("DiscoveredJobsList", () => {
       olderThanDays: 30,
     });
     await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+  });
+
+  it("narrows to postings that say they are remote", async () => {
+    const { onQueryChange } = renderList();
+
+    await userEvent.click(screen.getByRole("button", { name: "Only" }));
+    await userEvent.click(screen.getByRole("menuitemcheckbox", { name: "Remote" }));
+
+    expect(onQueryChange).toHaveBeenCalledWith({ only: ["remote"] });
+  });
+
+  it("accepts the ticked rows in one go and offers nothing until one is ticked", async () => {
+    (setDiscoveredJobsStatus as any).mockResolvedValue({ success: true, updated: 2 });
+    const { onRefresh } = renderList({
+      jobs: [
+        makeJob({ id: "a", JobTitle: { label: "Alpha" } }),
+        makeJob({ id: "b", JobTitle: { label: "Beta" } }),
+        // Already decided: not selectable, and "select all" must skip it.
+        makeJob({ id: "c", JobTitle: { label: "Gamma" }, discoveryStatus: "accepted" }),
+      ],
+      totalJobs: 3,
+    });
+    expect(screen.queryByRole("button", { name: /^Accept \d/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Select Gamma" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select all new jobs shown" }));
+    await userEvent.click(screen.getByRole("button", { name: "Accept 2" }));
+
+    expect(setDiscoveredJobsStatus).toHaveBeenCalledWith({
+      ids: ["a", "b"],
+      status: "accepted",
+    });
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /^Accept \d/ })).not.toBeInTheDocument();
+  });
+
+  it("as the combined list, names the automation and narrows to one", async () => {
+    const { onQueryChange } = renderList({
+      automationId: undefined,
+      automations: [{ id: "automation-1", name: "Greenhouse" }],
+      jobs: [makeJob({ automation: { id: "automation-1", name: "Greenhouse" } })],
+      dismissedCount: 2,
+    });
+
+    expect(screen.getByRole("link", { name: "Greenhouse" })).toHaveAttribute(
+      "href",
+      "/dashboard/automations/automation-1?tab=jobs",
+    );
+    // Clear deletes one automation's rows; there is no one automation here.
+    expect(screen.queryByRole("button", { name: "Clear" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "All automations" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Greenhouse" }));
+    expect(onQueryChange).toHaveBeenCalledWith({ automationId: "automation-1" });
   });
 });

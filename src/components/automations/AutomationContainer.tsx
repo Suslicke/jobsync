@@ -11,6 +11,9 @@ import { getAutomationsList } from "@/actions/automation.actions";
 import type { AutomationWithResume } from "@/models/automation.model";
 import { AutomationList } from "./AutomationList";
 import { AutomationWizard } from "./AutomationWizard";
+import { AllDiscoveredJobs } from "./AllDiscoveredJobs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTabQueryParam } from "@/hooks/useTabQueryParam";
 import Loading from "@/components/Loading";
 
 interface Resume {
@@ -32,6 +35,10 @@ export function AutomationContainer({ resumes }: AutomationContainerProps) {
   const [editAutomation, setEditAutomation] =
     useState<AutomationWithResume | null>(null);
   const autoOpenHandled = useRef(false);
+  const [activeTab, setActiveTab] = useTabQueryParam(
+    ["automations", "jobs"],
+    "automations",
+  );
 
   const loadAutomations = useCallback(async () => {
     setLoading(true);
@@ -81,31 +88,44 @@ export function AutomationContainer({ resumes }: AutomationContainerProps) {
 
   return (
     <>
-      <Card>
-        <ResponsiveCardHeader>
-          <CardTitle>Automations</CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="icon" onClick={loadAutomations}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" onClick={() => setWizardOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Automation
-            </Button>
-          </div>
-        </ResponsiveCardHeader>
-        <CardContent>
-          {loading ? (
-            <Loading />
-          ) : (
-            <AutomationList
-              automations={automations}
-              onEdit={handleEdit}
-              onRefresh={loadAutomations}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="automations">Automations</TabsTrigger>
+          <TabsTrigger value="jobs">Discovered Jobs</TabsTrigger>
+        </TabsList>
+        <TabsContent value="automations" className="mt-4">
+          <Card>
+            <ResponsiveCardHeader>
+              <CardTitle>Automations</CardTitle>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="icon" onClick={loadAutomations}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" onClick={() => setWizardOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Automation
+                </Button>
+              </div>
+            </ResponsiveCardHeader>
+            <CardContent>
+              {loading ? (
+                <Loading />
+              ) : (
+                <AutomationList
+                  automations={automations}
+                  onEdit={handleEdit}
+                  onRefresh={loadAutomations}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        {/* Mounted only while open: the combined list is a query over every
+            automation's pile, not worth running behind the other tab. */}
+        <TabsContent value="jobs" className="mt-4">
+          <AllDiscoveredJobs automations={automations} />
+        </TabsContent>
+      </Tabs>
 
       <AutomationWizard
         open={wizardOpen}

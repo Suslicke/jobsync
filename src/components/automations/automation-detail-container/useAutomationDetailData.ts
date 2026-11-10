@@ -1,23 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toastError } from "@/lib/toast";
 import {
   getAutomationById,
   getAutomationRuns,
-  getDiscoveredJobs,
 } from "@/actions/automation.actions";
 import type {
   AutomationWithResume,
   AutomationRun,
-  DiscoveredJob,
-  DiscoveredSortBy,
-  DiscoveryStatus,
 } from "@/models/automation.model";
 import { APP_CONSTANTS } from "@/lib/constants";
+import { useDiscoveredJobs } from "../discovered-jobs-list/useDiscoveredJobs";
 
-// Owns the automation record plus its paginated runs and discovered jobs.
+// Owns the automation record plus its paginated runs; the discovered jobs come
+// from the hook the combined list uses too.
 export function useAutomationDetailData(automationId: string) {
   const router = useRouter();
 
@@ -28,64 +26,30 @@ export function useAutomationDetailData(automationId: string) {
   const [runsPage, setRunsPage] = useState(1);
   const [totalRuns, setTotalRuns] = useState(0);
   const [runsLoadingMore, setRunsLoadingMore] = useState(false);
-  const [jobs, setJobs] = useState<DiscoveredJob[]>([]);
-  const [jobsPage, setJobsPage] = useState(1);
-  const [totalJobs, setTotalJobs] = useState(0);
-  const [jobsLoadingMore, setJobsLoadingMore] = useState(false);
-  const [jobStatusCounts, setJobStatusCounts] = useState<{
-    new: number;
-    dismissed: number;
-    accepted: number;
-  }>({ new: 0, dismissed: 0, accepted: 0 });
-  const [statusFilter, setStatusFilter] = useState<DiscoveryStatus[]>([
-    "new",
-    "accepted",
-  ]);
-  // Mirrors statusFilter for loadData, which must not depend on statusFilter
-  // directly (that would re-trigger its mount effect and flash the full-page
-  // loading state whenever the filter changes).
-  const statusFilterRef = useRef(statusFilter);
-  useEffect(() => {
-    statusFilterRef.current = statusFilter;
-  }, [statusFilter]);
-  const [sortBy, setSortBy] = useState<DiscoveredSortBy>("matchScore");
-  // Same reason as statusFilterRef: fetchJobs must not change identity when the
-  // order does, or the mount effect re-runs and flashes the loading state.
-  const sortByRef = useRef(sortBy);
-  useEffect(() => {
-    sortByRef.current = sortBy;
-  }, [sortBy]);
-  // 0 is "any time". A ref and nothing else reads it in fetchJobs, so every
-  // path that loads jobs — refresh, load more, status, sort — keeps the range
-  // without being handed it.
-  const [maxAgeDays, setMaxAgeDays] = useState(0);
-  const maxAgeDaysRef = useRef(maxAgeDays);
   const [loading, setLoading] = useState(true);
 
-  const fetchJobs = useCallback(
-    (filter: DiscoveryStatus[], page = 1, sort: DiscoveredSortBy = sortByRef.current) =>
-      getDiscoveredJobs({
-        automationId,
-        discoveryStatus: filter,
-        page,
-        limit: APP_CONSTANTS.RECORDS_PER_PAGE,
-        sortBy: sort,
-        maxAgeDays: maxAgeDaysRef.current || undefined,
-      }),
-    [automationId],
-  );
+  const {
+    jobs,
+    totalJobs,
+    jobsLoadingMore,
+    jobStatusCounts,
+    query,
+    setQuery,
+    refreshJobs,
+    loadMoreJobs,
+  } = useDiscoveredJobs(automationId);
 
   const loadData = useCallback(
     async (showLoading = false) => {
       if (showLoading) setLoading(true);
       try {
-        const [automationResult, runsResult, jobsResult] = await Promise.all([
+        const [automationResult, runsResult] = await Promise.all([
           getAutomationById(automationId),
           getAutomationRuns(automationId, {
             page: 1,
             limit: APP_CONSTANTS.RECORDS_PER_PAGE,
           }),
-          fetchJobs(statusFilterRef.current),
+          refreshJobs(),
         ]);
 
         if (automationResult.success && automationResult.data) {
@@ -102,21 +66,12 @@ export function useAutomationDetailData(automationId: string) {
           setTotalRuns(runsResult.total ?? 0);
           setRunsPage(1);
         }
-
-        if (jobsResult.success && jobsResult.data) {
-          setJobs(jobsResult.data);
-          setTotalJobs(jobsResult.total ?? 0);
-          setJobsPage(1);
-          if (jobsResult.statusCounts) {
-            setJobStatusCounts(jobsResult.statusCounts);
-          }
-        }
       } catch (error) {
         toastError("Failed to load automation details");
       }
       if (showLoading) setLoading(false);
     },
-    [automationId, router, fetchJobs],
+    [automationId, router, refreshJobs],
   );
 
   useEffect(() => {
@@ -126,80 +81,6 @@ export function useAutomationDetailData(automationId: string) {
     // to "Running" and then rejects the completed SSE snapshot.
     loadData(true);
   }, [loadData]);
-
-  const refreshJobs = useCallback(async () => {
-    const jobsResult = await fetchJobs(statusFilter);
-    if (jobsResult.success && jobsResult.data) {
-      setJobs(jobsResult.data);
-      setTotalJobs(jobsResult.total ?? 0);
-      setJobsPage(1);
-      if (jobsResult.statusCounts) {
-        setJobStatusCounts(jobsResult.statusCounts);
-      }
-    }
-  }, [fetchJobs, statusFilter]);
-
-  const loadMoreJobs = useCallback(async () => {
-    setJobsLoadingMore(true);
-    try {
-      const nextPage = jobsPage + 1;
-      const jobsResult = await fetchJobs(statusFilter, nextPage);
-      if (jobsResult.success && jobsResult.data) {
-        setJobs((prev) => [...prev, ...jobsResult.data!]);
-        setTotalJobs(jobsResult.total ?? 0);
-        setJobsPage(nextPage);
-      }
-    } finally {
-      setJobsLoadingMore(false);
-    }
-  }, [fetchJobs, jobsPage, statusFilter]);
-
-  const handleStatusFilterChange = useCallback(
-    async (filter: DiscoveryStatus[]) => {
-      setStatusFilter(filter);
-      const jobsResult = await fetchJobs(filter);
-      if (jobsResult.success && jobsResult.data) {
-        setJobs(jobsResult.data);
-        setTotalJobs(jobsResult.total ?? 0);
-        setJobsPage(1);
-        if (jobsResult.statusCounts) {
-          setJobStatusCounts(jobsResult.statusCounts);
-        }
-      }
-    },
-    [fetchJobs],
-  );
-
-  const handleSortByChange = useCallback(
-    async (next: DiscoveredSortBy) => {
-      setSortBy(next);
-      // Paging is server-side, so a new order means a new first page: keeping
-      // the loaded rows would mix two rankings in one list.
-      const jobsResult = await fetchJobs(statusFilter, 1, next);
-      if (jobsResult.success && jobsResult.data) {
-        setJobs(jobsResult.data);
-        setTotalJobs(jobsResult.total ?? 0);
-        setJobsPage(1);
-      }
-    },
-    [fetchJobs, statusFilter],
-  );
-
-  const handleMaxAgeDaysChange = useCallback(
-    async (days: number) => {
-      // Set before the fetch, not in an effect: the request below must already
-      // carry the new range.
-      maxAgeDaysRef.current = days;
-      setMaxAgeDays(days);
-      const jobsResult = await fetchJobs(statusFilter);
-      if (jobsResult.success && jobsResult.data) {
-        setJobs(jobsResult.data);
-        setTotalJobs(jobsResult.total ?? 0);
-        setJobsPage(1);
-      }
-    },
-    [fetchJobs, statusFilter],
-  );
 
   const loadMoreRuns = useCallback(async () => {
     setRunsLoadingMore(true);
@@ -228,16 +109,12 @@ export function useAutomationDetailData(automationId: string) {
     totalJobs,
     jobsLoadingMore,
     jobStatusCounts,
-    statusFilter,
-    sortBy,
-    maxAgeDays,
+    query,
+    setQuery,
     loading,
     loadData,
     refreshJobs,
     loadMoreJobs,
     loadMoreRuns,
-    handleStatusFilterChange,
-    handleSortByChange,
-    handleMaxAgeDaysChange,
   };
 }

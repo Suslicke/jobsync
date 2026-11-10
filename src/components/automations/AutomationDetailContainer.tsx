@@ -44,17 +44,13 @@ export function AutomationDetailContainer({
     totalJobs,
     jobsLoadingMore,
     jobStatusCounts,
-    statusFilter,
-    sortBy,
+    query,
+    setQuery,
     loading,
     loadData,
     refreshJobs,
     loadMoreJobs,
     loadMoreRuns,
-    handleStatusFilterChange,
-    handleSortByChange,
-    maxAgeDays,
-    handleMaxAgeDaysChange,
   } = useAutomationDetailData(automationId);
 
   const {
@@ -179,12 +175,8 @@ export function AutomationDetailContainer({
             dismissedCount={jobStatusCounts.dismissed}
             newCount={jobStatusCounts.new}
             acceptedCount={jobStatusCounts.accepted}
-            statusFilter={statusFilter}
-            onStatusFilterChange={handleStatusFilterChange}
-            sortBy={sortBy}
-            onSortByChange={handleSortByChange}
-            maxAgeDays={maxAgeDays}
-            onMaxAgeDaysChange={handleMaxAgeDaysChange}
+            query={query}
+            onQueryChange={setQuery}
             automationId={automationId}
             onRefresh={loadData}
             onViewDetails={handleViewJobDetails}

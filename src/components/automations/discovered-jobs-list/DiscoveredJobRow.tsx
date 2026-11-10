@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,10 @@ interface DiscoveredJobRowProps {
   onAnalyze: (jobId: string) => void;
   onAccept: (job: DiscoveredJob) => void;
   onDismiss: (jobId: string) => void;
+  selected: boolean;
+  onSelectedChange: (selected: boolean) => void;
+  /** The combined list shows which automation found the job. */
+  showAutomation: boolean;
 }
 
 export function DiscoveredJobRow({
@@ -40,12 +45,28 @@ export function DiscoveredJobRow({
   onAnalyze,
   onAccept,
   onDismiss,
+  selected,
+  onSelectedChange,
+  showAutomation,
 }: DiscoveredJobRowProps) {
   const analyzed = isAnalyzed(job);
   const prerankPercent = getPrerankPercent(job);
 
   return (
-    <TableRow>
+    <TableRow data-state={selected ? "selected" : undefined}>
+      <TableCell className="w-8">
+        {/* Only unreviewed rows can be picked: the bulk buttons do what the
+            per-row ones do, and those are offered on nothing else. */}
+        {job.discoveryStatus === "new" && (
+          <input
+            type="checkbox"
+            className="h-4 w-4 align-middle"
+            aria-label={`Select ${job.JobTitle.label}`}
+            checked={selected}
+            onChange={(e) => onSelectedChange(e.target.checked)}
+          />
+        )}
+      </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
           <span
@@ -83,6 +104,20 @@ export function DiscoveredJobRow({
           )}
         </div>
       </TableCell>
+      {showAutomation && (
+        <TableCell className="text-sm text-muted-foreground">
+          {job.automation ? (
+            <Link
+              href={`/dashboard/automations/${job.automation.id}?tab=jobs`}
+              className="hover:text-foreground hover:underline"
+            >
+              {job.automation.name}
+            </Link>
+          ) : (
+            "—"
+          )}
+        </TableCell>
+      )}
       <TableCell className="text-center">
         {prerankPercent != null ? (
           <span

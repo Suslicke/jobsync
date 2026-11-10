@@ -10,11 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Briefcase, Loader2 } from "lucide-react";
-import type {
-  DiscoveredJob,
-  DiscoveredSortBy,
-  DiscoveryStatus,
-} from "@/models/automation.model";
+import type { DiscoveredJob, DiscoveredQuery } from "@/models/automation.model";
 import { isAnalyzed } from "./discovered-jobs-list/matchData";
 import { useDiscoveredJobActions } from "./discovered-jobs-list/useDiscoveredJobActions";
 import { useJobsInfiniteScroll } from "./discovered-jobs-list/useJobsInfiniteScroll";
@@ -34,13 +30,12 @@ interface DiscoveredJobsListProps {
   dismissedCount: number;
   newCount: number;
   acceptedCount: number;
-  statusFilter: DiscoveryStatus[];
-  onStatusFilterChange: (filter: DiscoveryStatus[]) => void;
-  sortBy: DiscoveredSortBy;
-  onSortByChange: (sortBy: DiscoveredSortBy) => void;
-  maxAgeDays: number;
-  onMaxAgeDaysChange: (days: number) => void;
-  automationId: string;
+  query: DiscoveredQuery;
+  onQueryChange: (patch: Partial<DiscoveredQuery>) => void;
+  /** One automation's pile. Left out, the list is every automation's at once. */
+  automationId?: string;
+  /** The combined list only: the automations it can be narrowed to. */
+  automations?: { id: string; name: string }[];
   onRefresh: () => void;
   onViewDetails?: (job: DiscoveredJob) => void;
   // True while an automation run is in flight. The Analyze button is blocked to avoid concurrent LLM calls.
@@ -58,13 +53,10 @@ export function DiscoveredJobsList({
   dismissedCount,
   newCount,
   acceptedCount,
-  statusFilter,
-  onStatusFilterChange,
-  sortBy,
-  onSortByChange,
-  maxAgeDays,
-  onMaxAgeDaysChange,
+  query,
+  onQueryChange,
   automationId,
+  automations,
   onRefresh,
   onViewDetails,
   runInProgress = false,
@@ -78,8 +70,11 @@ export function DiscoveredJobsList({
     handleAnalyze,
     handleAccept,
     handleDismiss,
+    handleBulkStatus,
     handleDismissOlderThan,
   } = useDiscoveredJobActions(onRefresh, onBusyChange);
+  const { sortBy } = query;
+  const combined = !automationId;
 
   const sentinelRef = useJobsInfiniteScroll(
     jobs.length,
@@ -105,6 +100,20 @@ export function DiscoveredJobsList({
     });
   }, [jobs, sortBy]);
 
+  // Ticked ids are kept as they were clicked and read through the rows on
+  // screen: a row that left the list — dismissed, filtered out, re-sorted off
+  // the first page — drops out of the count without anything clearing it.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selectable = sortedJobs.filter((j) => j.discoveryStatus === "new");
+  const picked = selectable.filter((j) => selected.has(j.id)).map((j) => j.id);
+  const toggle = (id: string, on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
   const hasAnyJobs = dismissedCount + newCount + acceptedCount > 0;
 
   if (!hasAnyJobs) {
@@ -126,19 +135,25 @@ export function DiscoveredJobsList({
       <DiscoveredJobsHeader
         loadedCount={jobs.length}
         totalJobs={totalJobs}
-        showClear={dismissedCount + newCount > 0}
+        // Clearing deletes one automation's rows; the combined list has no
+        // single automation to clear.
+        showClear={!combined && dismissedCount + newCount > 0}
         onClear={() => {
           setClearIncludeNew(false);
           setClearOpen(true);
         }}
-        statusFilter={statusFilter}
-        onStatusFilterChange={onStatusFilterChange}
-        sortBy={sortBy}
-        onSortByChange={onSortByChange}
-        maxAgeDays={maxAgeDays}
-        onMaxAgeDaysChange={onMaxAgeDaysChange}
+        query={query}
+        onQueryChange={onQueryChange}
         newCount={newCount}
-        onDismissOlderThan={(days) => handleDismissOlderThan(automationId, days)}
+        onDismissOlderThan={(days) =>
+          handleDismissOlderThan(automationId ?? query.automationId, days)
+        }
+        automations={combined ? automations : undefined}
+        selectedCount={picked.length}
+        onBulkStatus={async (status) => {
+          await handleBulkStatus(picked, status);
+          setSelected(new Set());
+        }}
       />
       <CardContent>
         {jobs.length === 0 ? (
@@ -146,7 +161,7 @@ export function DiscoveredJobsList({
             <Briefcase className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium">No jobs match this filter</h3>
             <p className="text-muted-foreground mt-2">
-              Try a different status or a wider date range above.
+              Try a different status, a wider date range or fewer filters above.
             </p>
           </div>
         ) : (
@@ -154,9 +169,29 @@ export function DiscoveredJobsList({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8">
+                    {selectable.length > 0 && (
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 align-middle"
+                        aria-label="Select all new jobs shown"
+                        checked={picked.length === selectable.length}
+                        onChange={(e) =>
+                          setSelected(
+                            new Set(
+                              e.target.checked
+                                ? selectable.map((j) => j.id)
+                                : [],
+                            ),
+                          )
+                        }
+                      />
+                    )}
+                  </TableHead>
                   <TableHead>Job</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Location</TableHead>
+                  {combined && <TableHead>Found by</TableHead>}
                   <TableHead className="text-center">Pre-rank</TableHead>
                   <TableHead className="text-center">Reach</TableHead>
                   <TableHead className="text-center">Match</TableHead>
@@ -176,6 +211,9 @@ export function DiscoveredJobsList({
                     onAnalyze={handleAnalyze}
                     onAccept={handleAccept}
                     onDismiss={handleDismiss}
+                    selected={selected.has(job.id)}
+                    onSelectedChange={(on) => toggle(job.id, on)}
+                    showAutomation={combined}
                   />
                 ))}
               </TableBody>
@@ -198,15 +236,17 @@ export function DiscoveredJobsList({
         )}
       </CardContent>
 
-      <ClearJobsDialog
-        open={clearOpen}
-        onOpenChange={setClearOpen}
-        includeNew={clearIncludeNew}
-        onIncludeNewChange={setClearIncludeNew}
-        newCount={newCount}
-        automationId={automationId}
-        onRefresh={onRefresh}
-      />
+      {automationId && (
+        <ClearJobsDialog
+          open={clearOpen}
+          onOpenChange={setClearOpen}
+          includeNew={clearIncludeNew}
+          onIncludeNewChange={setClearIncludeNew}
+          newCount={newCount}
+          automationId={automationId}
+          onRefresh={onRefresh}
+        />
+      )}
     </Card>
   );
 }

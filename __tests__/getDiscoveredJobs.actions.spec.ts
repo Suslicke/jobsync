@@ -1,4 +1,8 @@
-import { dismissOldDiscoveredJobs, getDiscoveredJobs } from "@/actions/automation.actions";
+import {
+  dismissOldDiscoveredJobs,
+  getDiscoveredJobs,
+  setDiscoveredJobsStatus,
+} from "@/actions/automation.actions";
 import { getCurrentUser } from "@/utils/user.utils";
 import { PrismaClient } from "@prisma/client";
 
@@ -121,11 +125,77 @@ describe("dismissOldDiscoveredJobs", () => {
     expect(data).toEqual({ discoveryStatus: "dismissed" });
   });
 
+  it("without an automation, covers every one of the user's", async () => {
+    await dismissOldDiscoveredJobs({ olderThanDays: 30 });
+    const { where } = (prisma.job.updateMany as any).mock.calls[0][0];
+    expect(where.automationId).toEqual({ not: null });
+    expect(where.userId).toBe("user-id");
+  });
+
   it("refuses an age that would sweep the whole pile", async () => {
     for (const olderThanDays of [0, -1, NaN]) {
       const result = await dismissOldDiscoveredJobs({ automationId: "a-1", olderThanDays });
       expect(result.success).toBe(false);
     }
+    expect(prisma.job.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("getDiscoveredJobs narrowing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (getCurrentUser as any).mockResolvedValue({ id: "user-id" });
+    (prisma.job.findMany as any).mockResolvedValue([]);
+    (prisma.job.count as any).mockResolvedValue(0);
+    (prisma.job.groupBy as any).mockResolvedValue([]);
+  });
+
+  it("requires every named filter, read off the stored analysis", async () => {
+    await getDiscoveredJobs({ only: ["remote", "scored"] });
+
+    expect((prisma.job.findMany as any).mock.calls[0][0].where.AND).toEqual([
+      { fitData: { contains: '"workplace":"remote"' } },
+      { matchData: { contains: '"analyzed":true' } },
+    ]);
+  });
+
+  it("adds nothing for an empty or unknown filter", async () => {
+    await getDiscoveredJobs({ only: [] });
+    await getDiscoveredJobs({ only: ["nonsense" as any] });
+    for (const call of (prisma.job.findMany as any).mock.calls)
+      expect(call[0].where.AND).toBeUndefined();
+  });
+});
+
+describe("setDiscoveredJobsStatus", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (getCurrentUser as any).mockResolvedValue({ id: "user-id" });
+    (prisma.job.updateMany as any).mockResolvedValue({ count: 2 });
+  });
+
+  it("moves only this user's unreviewed discovered jobs", async () => {
+    const result = await setDiscoveredJobsStatus({ ids: ["a", "b"], status: "dismissed" });
+
+    expect(result).toEqual({ success: true, updated: 2 });
+    expect((prisma.job.updateMany as any).mock.calls[0][0]).toEqual({
+      where: {
+        userId: "user-id",
+        id: { in: ["a", "b"] },
+        automationId: { not: null },
+        discoveryStatus: "new",
+      },
+      data: { discoveryStatus: "dismissed" },
+    });
+  });
+
+  it("writes nothing for an empty selection or a status it does not know", async () => {
+    expect(await setDiscoveredJobsStatus({ ids: [], status: "accepted" })).toEqual({
+      success: true,
+      updated: 0,
+    });
+    const bad = await setDiscoveredJobsStatus({ ids: ["a"], status: "deleted" as any });
+    expect(bad.success).toBe(false);
     expect(prisma.job.updateMany).not.toHaveBeenCalled();
   });
 });

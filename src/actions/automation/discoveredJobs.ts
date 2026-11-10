@@ -4,10 +4,22 @@ import db from "@/lib/db";
 import { requireUser } from "../shared";
 import type {
   DiscoveredJob,
+  DiscoveredOnly,
   DiscoveryStatus,
 } from "@/models/automation.model";
 import { APP_CONSTANTS } from "@/lib/constants";
 import { formatError } from "./shared";
+
+// Read off the stored analysis as text, the way the jobs list reads its fit
+// facets: SQLite has no JSON operators worth the trouble, and these shapes are
+// written by one function each. "remote" is a posting that says so itself —
+// the same fact that lets its AI match reach the top band.
+const ONLY: Record<DiscoveredOnly, Record<string, unknown>> = {
+  remote: { fitData: { contains: '"workplace":"remote"' } },
+  clear: { fitData: { contains: '"blockers":[]' } },
+  scored: { matchData: { contains: '"analyzed":true' } },
+  visa: { fitData: { contains: '"visaSponsorship":true' } },
+};
 
 const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
@@ -31,6 +43,8 @@ export async function getDiscoveredJobs(options?: {
   sortOrder?: "asc" | "desc";
   /** Only jobs first seen within this many days. Omitted: any age. */
   maxAgeDays?: number;
+  /** Every filter named here must hold. */
+  only?: DiscoveredOnly[];
 }): Promise<{
   success: boolean;
   data?: DiscoveredJob[];
@@ -49,6 +63,7 @@ export async function getDiscoveredJobs(options?: {
       sortBy = "matchScore",
       sortOrder = "desc",
       maxAgeDays,
+      only,
     } = options || {};
 
     const skip = (page - 1) * limit;
@@ -78,6 +93,8 @@ export async function getDiscoveredJobs(options?: {
     if (maxAgeDays && maxAgeDays > 0) {
       where.discoveredAt = { gte: daysAgo(maxAgeDays) };
     }
+    const narrowed = (only ?? []).map((key) => ONLY[key]).filter(Boolean);
+    if (narrowed.length) where.AND = narrowed;
 
     const [jobs, total, grouped] = await Promise.all([
       db.job.findMany({
@@ -231,7 +248,8 @@ export async function dismissDiscoveredJob(id: string): Promise<{
 // — the opposite of clearing it out. A dismissed row stays as the memory, and
 // the list leaves dismissed rows out unless asked for them.
 export async function dismissOldDiscoveredJobs(options: {
-  automationId: string;
+  /** Omitted: every automation of the user, for the combined list. */
+  automationId?: string;
   olderThanDays: number;
 }): Promise<{ success: boolean; dismissed?: number; message?: string }> {
   try {
@@ -246,7 +264,7 @@ export async function dismissOldDiscoveredJobs(options: {
     const result = await db.job.updateMany({
       where: {
         userId: user.id,
-        automationId,
+        automationId: automationId ?? { not: null },
         discoveryStatus: "new",
         discoveredAt: { lt: daysAgo(olderThanDays) },
       },
@@ -256,6 +274,39 @@ export async function dismissOldDiscoveredJobs(options: {
     return { success: true, dismissed: result.count };
   } catch (error) {
     return formatError(error, "Failed to dismiss old discovered jobs");
+  }
+}
+
+// Accepts or dismisses a hand-picked set in one write. Only unreviewed rows
+// move, as with the per-row buttons, which are not offered on anything else.
+export async function setDiscoveredJobsStatus(options: {
+  ids: string[];
+  status: "accepted" | "dismissed";
+}): Promise<{ success: boolean; updated?: number; message?: string }> {
+  try {
+    const user = await requireUser();
+
+    const { ids, status } = options;
+    if (status !== "accepted" && status !== "dismissed") {
+      return { success: false, message: "Unknown status" };
+    }
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return { success: true, updated: 0 };
+    }
+
+    const result = await db.job.updateMany({
+      where: {
+        userId: user.id,
+        id: { in: ids },
+        automationId: { not: null },
+        discoveryStatus: "new",
+      },
+      data: { discoveryStatus: status },
+    });
+
+    return { success: true, updated: result.count };
+  } catch (error) {
+    return formatError(error, "Failed to update discovered jobs");
   }
 }
 
